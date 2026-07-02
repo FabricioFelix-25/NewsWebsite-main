@@ -8,17 +8,19 @@ interface ArticleListProps {
   articles: Article[];
   onDelete: (id: string) => void;
   onPublish?: (id: string) => void;
+  onBulkDelete?: (ids: string[]) => void;
 }
 
 type SortField = 'title' | 'category' | 'publishedAt' | 'status' | 'views';
 type SortDirection = 'asc' | 'desc';
 type StatusFilter = 'all' | 'published' | 'draft';
 
-const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish }) => {
+const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish, onBulkDelete }) => {
   const [sortField, setSortField] = useState<SortField>('publishedAt');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -76,6 +78,33 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish
     return sortDirection === 'asc' ? <ArrowUp className="h-4 w-4 ml-1" /> : <ArrowDown className="h-4 w-4 ml-1" />;
   };
 
+  const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.checked) {
+      setSelectedIds(sortedArticles.map(a => a.id));
+    } else {
+      setSelectedIds([]);
+    }
+  };
+
+  const handleSelectOne = (id: string) => {
+    setSelectedIds(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.length === 0) return;
+    if (window.confirm(`Tem certeza que deseja apagar os ${selectedIds.length} artigos selecionados? Esta acao nao pode ser desfeita.`)) {
+      if (onBulkDelete) {
+        onBulkDelete(selectedIds);
+        setSelectedIds([]);
+      } else {
+        selectedIds.forEach(id => onDelete(id));
+        setSelectedIds([]);
+      }
+    }
+  };
+
   return (
     <div>
       <div className="mb-4 flex flex-col md:flex-row md:items-center gap-3">
@@ -96,12 +125,30 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish
           <option value="published">Somente publicados</option>
           <option value="draft">Somente rascunhos</option>
         </select>
+
+        {selectedIds.length > 0 && (
+          <button
+            onClick={handleBulkDelete}
+            className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors ml-auto"
+          >
+            <Trash2 className="h-5 w-5" />
+            <span>Apagar Selecionados ({selectedIds.length})</span>
+          </button>
+        )}
       </div>
 
       <div className="bg-white rounded-lg shadow overflow-hidden">
         <table className="min-w-full divide-y divide-neutral-200">
           <thead className="bg-neutral-50">
             <tr>
+              <th scope="col" className="px-6 py-3 text-left">
+                <input
+                  type="checkbox"
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                  checked={sortedArticles.length > 0 && selectedIds.length === sortedArticles.length}
+                  onChange={handleSelectAll}
+                />
+              </th>
               <th
                 scope="col"
                 className="px-6 py-3 text-left text-xs font-medium text-neutral-500 uppercase tracking-wider cursor-pointer"
@@ -151,7 +198,15 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish
           <tbody className="bg-white divide-y divide-neutral-200">
             {sortedArticles.length > 0 ? (
               sortedArticles.map((article) => (
-                <tr key={article.id} className="hover:bg-neutral-50">
+                <tr key={article.id} className={`hover:bg-neutral-50 ${selectedIds.includes(article.id) ? 'bg-blue-50' : ''}`}>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <input
+                      type="checkbox"
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 h-4 w-4"
+                      checked={selectedIds.includes(article.id)}
+                      onChange={() => handleSelectOne(article.id)}
+                    />
+                  </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="text-sm font-medium text-neutral-900 max-w-[300px] truncate">{article.title}</div>
                   </td>
@@ -209,7 +264,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="px-6 py-4 text-center text-sm text-neutral-500">
+                <td colSpan={7} className="px-6 py-4 text-center text-sm text-neutral-500">
                   Nenhum artigo encontrado para os filtros atuais.
                 </td>
               </tr>
