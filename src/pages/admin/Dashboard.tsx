@@ -67,17 +67,26 @@ const Dashboard: React.FC = () => {
       setArticles((prev) => prev.filter((article) => article.id !== id));
     } catch (error) {
       console.error('Erro ao excluir artigo:', error);
+      // Remove da interface caso já tenha sido excluído anteriormente
+      setArticles((prev) => prev.filter((article) => article.id !== id));
     }
   };
 
   const handleBulkDeleteArticles = async (ids: string[]) => {
-    try {
-      for (const id of ids) {
+    let falhas = 0;
+    for (const id of ids) {
+      try {
         await deleteArticle(id);
+        setArticles((prev) => prev.filter((article) => article.id !== id));
+      } catch (error) {
+        console.error(`Erro ao excluir artigo ${id}:`, error);
+        falhas++;
+        // Remove da tela mesmo se der erro (provavelmente já foi apagado no backend)
+        setArticles((prev) => prev.filter((article) => article.id !== id));
       }
-      setArticles((prev) => prev.filter((article) => !ids.includes(article.id)));
-    } catch (error) {
-      console.error('Erro ao excluir artigos:', error);
+    }
+    if (falhas > 0) {
+      console.warn(`${falhas} artigos já não existiam no servidor.`);
     }
   };
 
