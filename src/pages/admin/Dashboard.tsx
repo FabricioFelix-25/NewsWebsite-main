@@ -70,6 +70,17 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleBulkDeleteArticles = async (ids: string[]) => {
+    try {
+      for (const id of ids) {
+        await deleteArticle(id);
+      }
+      setArticles((prev) => prev.filter((article) => !ids.includes(article.id)));
+    } catch (error) {
+      console.error('Erro ao excluir artigos:', error);
+    }
+  };
+
   const handlePublishArticle = async (id: string) => {
     const target = articles.find((article) => article.id === id);
     if (!target) {
@@ -236,7 +247,12 @@ const Dashboard: React.FC = () => {
 
       <div className="bg-white rounded-lg shadow-sm border border-neutral-200 p-6 mb-8">
         <h2 className="text-xl font-semibold mb-6">Gestao de artigos</h2>
-        <ArticleList articles={articles} onDelete={handleDeleteArticle} onPublish={handlePublishArticle} />
+        <ArticleList 
+          articles={articles} 
+          onDelete={handleDeleteArticle} 
+          onPublish={handlePublishArticle} 
+          onBulkDelete={handleBulkDeleteArticles} 
+        />
       </div>
     </div>
   );
