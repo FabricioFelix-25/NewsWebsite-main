@@ -63,7 +63,11 @@ export default async function handler(req, res) {
         "content": "O texto completo da matéria, formatado em HTML (use tags <p>, <strong>, <h3>, etc. Não use <html> ou <body>, apenas o conteúdo interno).",
         "excerpt": "Um resumo de 2 linhas para a home page",
         "category": "Escolha UMA das seguintes categorias: ${ALLOWED_CATEGORIES.join(', ')}",
-        "tags": ["tag1", "tag2", "tag3", "tag4"]
+        "tags": ["tag1", "tag2", "tag3", "tag4"],
+        "imageDirective": {
+          "type": "wikipedia", // Escolha: 'wikipedia' (se for cidade, pessoa real, instituição ou empresa), 'pexels' (se for conceito genérico como negócios, tecnologia, saúde), ou 'ai' (se for conceito futurista ou abstrato)
+          "query": "Apenas o nome exato da entidade ou termo de busca" // Ex: 'Tribunal de Contas do Estado', 'Fortaleza', 'Windows', 'business meeting', 'futuristic robot'
+        }
       }
       
       Importante: Retorne APENAS o JSON válido. Não inclua \`\`\`json antes ou depois.
@@ -81,21 +85,52 @@ export default async function handler(req, res) {
 
     const articleData = JSON.parse(jsonString);
 
-    // 2. Buscar imagem no Pexels
+    // 2. Roteador de Imagem Inteligente
     let imageUrl = 'https://picsum.photos/1600/900';
-    if (process.env.PEXELS_API_KEY) {
+    const directive = articleData.imageDirective || { type: 'pexels', query: articleData.tags[0] };
+    
+    console.log(\`Buscando imagem via: \${directive.type} para o termo "\${directive.query}"\`);
+
+    if (directive.type === 'wikipedia') {
       try {
-        const tagQuery = articleData.tags[0];
-        const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(tagQuery)}&per_page=1&orientation=landscape`, {
+        const wikiRes = await fetch(\`https://pt.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&generator=search&gsrsearch=\${encodeURIComponent(directive.query)}&gsrlimit=1\`);
+        const wikiData = await wikiRes.json();
+        if (wikiData.query && wikiData.query.pages) {
+          const pages = Object.values(wikiData.query.pages);
+          if (pages.length > 0 && pages[0].original) {
+            imageUrl = pages[0].original.source;
+          } else {
+            directive.type = 'pexels';
+          }
+        } else {
+          directive.type = 'pexels';
+        }
+      } catch (e) {
+        console.error('Erro na Wikipedia', e);
+        directive.type = 'pexels';
+      }
+    }
+
+    if (directive.type === 'pexels' && process.env.PEXELS_API_KEY) {
+      try {
+        const pexelsRes = await fetch(\`https://api.pexels.com/v1/search?query=\${encodeURIComponent(directive.query)}&per_page=1&orientation=landscape\`, {
           headers: { 'Authorization': process.env.PEXELS_API_KEY }
         });
         const pexelsData = await pexelsRes.json();
         if (pexelsData.photos && pexelsData.photos.length > 0) {
           imageUrl = pexelsData.photos[0].src.large2x;
+        } else {
+          directive.type = 'ai';
         }
       } catch (e) {
         console.error('Erro no pexels', e);
+        directive.type = 'ai';
       }
+    }
+
+    if (directive.type === 'ai' || (!process.env.PEXELS_API_KEY && directive.type === 'pexels')) {
+      const promptImagem = \`Realistic professional news cover photo about \${directive.query}, high quality, cinematic lighting\`;
+      imageUrl = \`https://image.pollinations.ai/prompt/\${encodeURIComponent(promptImagem)}?width=1600&height=900&nologo=true\`;
     }
 
     // 3. Salvar no Render
