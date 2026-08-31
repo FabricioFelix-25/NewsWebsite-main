@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { NewsProvider } from './contexts/NewsContext';
 import { TermsProvider } from './contexts/TermsContext';
+import { ThemeProvider } from './contexts/ThemeContext';
 
 // Layouts
 import MainLayout from './layouts/MainLayout';
@@ -26,10 +27,11 @@ import CookiePolicyPage from './pages/CookiePolicyPage';
 
 function App() {
   return (
-    <Router>
-      <AuthProvider>
-        <NewsProvider>
-          <TermsProvider>
+    <ThemeProvider>
+      <Router>
+        <AuthProvider>
+          <NewsProvider>
+            <TermsProvider>
             <Routes>
               {/* Public Routes */}
               <Route path="/" element={<MainLayout />}>
@@ -62,6 +64,7 @@ function App() {
         </NewsProvider>
       </AuthProvider>
     </Router>
+  </ThemeProvider>
   );
 }
 

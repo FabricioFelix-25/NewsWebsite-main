@@ -99,11 +99,11 @@ const HomePage: React.FC = () => {
 
   return (
     <div>
-      <section className="mb-8 bg-white rounded-lg border border-neutral-200 p-5">
+      <section className="mb-8 bg-white dark:bg-slate-900/80 rounded-xl border border-neutral-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-950/50 backdrop-blur-sm transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold">AlpesNews</h1>
-            <p className="text-neutral-600 mt-1">
+            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">AlpesNews</h1>
+            <p className="text-neutral-600 dark:text-slate-400 mt-1">
               Descubra conteudos por interesse e acompanhe os temas que importam para voce.
             </p>
           </div>
@@ -113,10 +113,10 @@ const HomePage: React.FC = () => {
                 key={interest.value}
                 type="button"
                 onClick={() => setSelectedInterest(interest.value)}
-                className={`px-3 py-2 rounded-full text-sm border transition-colors ${
+                className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
                   selectedInterest === interest.value
-                    ? 'bg-neutral-900 text-white border-neutral-900'
-                    : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
+                    ? 'bg-neutral-900 dark:bg-sky-600 text-white border-neutral-900 dark:border-sky-600 shadow-md shadow-sky-600/20'
+                    : 'bg-white dark:bg-slate-800 text-neutral-700 dark:text-slate-300 border-neutral-200 dark:border-slate-700 hover:bg-neutral-100 dark:hover:bg-slate-700'
                 }`}
               >
                 {interest.label}

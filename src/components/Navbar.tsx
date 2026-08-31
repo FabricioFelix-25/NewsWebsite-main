@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { Menu, Search, X, ChevronDown } from 'lucide-react';
 import SearchBar from './SearchBar';
+import ThemeToggle from './ThemeToggle';
 
 interface SubcategoryItem {
   name: string;
@@ -98,8 +99,10 @@ const Navbar: React.FC = () => {
     currentCategorySlug === category.slug ||
     category.subcategories.some((subcategory) => subcategory.slug === currentCategorySlug);
 
-  const navClass = `sticky top-0 z-50 transition-all duration-300 ${
-    scrolled ? 'bg-white shadow-md py-2' : 'bg-transparent py-4'
+  const navClass = `sticky top-0 z-50 transition-all duration-300 border-b ${
+    scrolled 
+      ? 'bg-white/90 dark:bg-[#0b0f19]/90 backdrop-blur-md shadow-md border-neutral-200/80 dark:border-slate-800/80 py-2.5' 
+      : 'bg-white/75 dark:bg-[#0b0f19]/75 backdrop-blur-sm border-neutral-200/40 dark:border-slate-800/40 py-3.5'
   }`;
 
   const getCategoryStyle = (category: string, isActive: boolean, isMobile = false) => {
@@ -186,7 +189,7 @@ const Navbar: React.FC = () => {
                   {category.name}
                   <ChevronDown className="ml-1 h-4 w-4" />
                 </NavLink>
-                <div className="absolute left-0 mt-1 w-52 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200">
+                <div className="absolute left-0 mt-1 w-52 rounded-xl shadow-xl bg-white dark:bg-slate-900 ring-1 ring-black/5 dark:ring-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 border border-neutral-100 dark:border-slate-800 py-1.5 backdrop-blur-md">
                   <div className="py-1">
                     {category.subcategories.map((sub) => (
                       <NavLink
@@ -203,16 +206,17 @@ const Navbar: React.FC = () => {
             ))}
           </div>
 
-          <div className="flex items-center space-x-4">
+          <div className="flex items-center space-x-2 md:space-x-3">
+            <ThemeToggle />
             <button
               onClick={toggleSearch}
-              className="p-2 rounded-full hover:bg-neutral-100"
+              className="p-2.5 rounded-xl text-neutral-600 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-slate-800 transition-colors"
               aria-label="Buscar"
             >
               <Search className="h-5 w-5" />
             </button>
             <button
-              className="md:hidden p-2 rounded-full hover:bg-neutral-100"
+              className="md:hidden p-2.5 rounded-xl text-neutral-600 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-slate-800 transition-colors"
               onClick={toggleMenu}
               aria-label="Menu"
             >
@@ -222,7 +226,7 @@ const Navbar: React.FC = () => {
         </div>
 
         {isMenuOpen && (
-          <div className="md:hidden mt-4 pb-4">
+          <div className="md:hidden mt-4 pb-4 border-t border-neutral-200 dark:border-slate-800 pt-4">
             <div className="flex flex-col space-y-2">
               {categories.map((category) => (
                 <div key={category.slug} className="flex flex-col">
@@ -250,7 +254,7 @@ const Navbar: React.FC = () => {
         )}
 
         {isSearchOpen && (
-          <div className="absolute inset-x-0 top-full bg-white shadow-md p-4">
+          <div className="absolute inset-x-0 top-full bg-white dark:bg-slate-900 border-b border-neutral-200 dark:border-slate-800 shadow-xl p-4 transition-colors">
             <SearchBar onClose={toggleSearch} />
           </div>
         )}

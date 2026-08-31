@@ -145,13 +145,13 @@ const ArticlePage: React.FC = () => {
         </header>
 
         <div 
-          className="prose prose-lg max-w-none mb-12"
+          className="prose prose-lg max-w-none mb-12 dark:prose-invert dark:prose-headings:text-slate-100 dark:prose-p:text-slate-300 dark:prose-a:text-sky-400 dark:prose-blockquote:text-slate-400 dark:prose-strong:text-white"
           dangerouslySetInnerHTML={{ __html: article.content || '' }}
         />
 
         {article.aiAssisted && (
-          <div className="flex items-start gap-3 border border-neutral-200 bg-neutral-50 p-4 rounded-lg mb-8 text-sm text-neutral-700">
-            <Bot className="h-5 w-5 mt-0.5 text-neutral-500" />
+          <div className="flex items-start gap-3 border border-neutral-200 dark:border-slate-800 bg-neutral-50 dark:bg-slate-900/60 p-4 rounded-xl mb-8 text-sm text-neutral-700 dark:text-slate-300 transition-colors">
+            <Bot className="h-5 w-5 mt-0.5 text-neutral-500 dark:text-sky-400" />
             <p>
               Esta materia teve apoio de inteligencia artificial na pesquisa, organizacao ou redacao inicial e passou por revisao humana antes da publicacao.
             </p>
@@ -159,14 +159,14 @@ const ArticlePage: React.FC = () => {
         )}
 
         {article.tags && article.tags.length > 0 && (
-          <div className="flex flex-wrap items-center border-t border-b border-neutral-200 py-4 mb-8">
-            <Tag className="h-4 w-4 mr-2" />
+          <div className="flex flex-wrap items-center border-t border-b border-neutral-200 dark:border-slate-800 py-4 mb-8">
+            <Tag className="h-4 w-4 mr-2 text-neutral-500 dark:text-slate-400" />
             <div className="flex flex-wrap gap-2">
               {article.tags.map((tag) => (
                 <Link
                   key={tag}
                   to={`/search?tag=${tag}`}
-                  className="px-3 py-1 bg-neutral-100 rounded-full text-sm hover:bg-neutral-200 transition-colors duration-200"
+                  className="px-3 py-1 bg-neutral-100 dark:bg-slate-800 text-neutral-700 dark:text-slate-300 border border-transparent dark:border-slate-700 rounded-full text-sm hover:bg-neutral-200 dark:hover:bg-slate-700 transition-colors duration-200"
                 >
                   {tag}
                 </Link>
@@ -175,9 +175,9 @@ const ArticlePage: React.FC = () => {
           </div>
         )}
 
-        <div className="flex items-center justify-between border-t border-neutral-200 pt-6 mb-12">
+        <div className="flex items-center justify-between border-t border-neutral-200 dark:border-slate-800 pt-6 mb-12">
           <div className="flex items-center">
-            <div className="h-12 w-12 rounded-full overflow-hidden mr-4">
+            <div className="h-12 w-12 rounded-full overflow-hidden mr-4 ring-2 ring-neutral-200 dark:ring-slate-700">
               <img
                 src={article.author?.avatarUrl || 'https://placehold.co/80x80?text=A'}
                 alt={article.author?.name || 'Autor'}
@@ -185,8 +185,8 @@ const ArticlePage: React.FC = () => {
               />
             </div>
             <div>
-              <p className="font-medium">{article.author?.name || 'Autor nao identificado'}</p>
-              <p className="text-sm text-neutral-600">{article.author?.bio || 'Redacao AlpesNews'}</p>
+              <p className="font-medium text-neutral-900 dark:text-slate-100">{article.author?.name || 'Autor nao identificado'}</p>
+              <p className="text-sm text-neutral-600 dark:text-slate-400">{article.author?.bio || 'Redacao AlpesNews'}</p>
             </div>
           </div>
         </div>
