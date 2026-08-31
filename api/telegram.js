@@ -53,20 +53,30 @@ export default async function handler(req, res) {
     // 1. Gerar com Gemini
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = `
-      Você é um jornalista sênior de um portal de notícias moderno chamado Alpes News.
-      O chefe te pediu para criar uma matéria detalhada sobre o seguinte assunto: "${text}"
+      Você é um jornalista investigativo sênior de um portal de notícias de alta credibilidade chamado Alpes News.
+      O editor-chefe solicitou uma cobertura jornalística completa, profissional e detalhada sobre o seguinte assunto: "${text}"
       
+      Estruture o conteúdo de forma rica e aprofundada:
+      - Título impactante e jornalístico.
+      - Subtítulo resumindo o fato principal.
+      - No corpo da matéria ("content"): use HTML sem <html> ou <body>. Divida em pelo menos 3 seções com subtítulos <h3>, use parágrafos <p> bem desenvolvidos, inclua citações destacadas em <blockquote class="border-l-4 border-blue-500 pl-4 my-4 italic text-neutral-600">.
+      - Insira exatamente o marcador [IMAGEM_INTERNA] entre o segundo e o terceiro bloco de texto para que possamos inserir uma foto secundária da cobertura.
+      - No final do texto, inclua SEMPRE uma caixa estilizada de 'Fontes e Links Oficiais' apontando para o site oficial real da empresa, órgão público ou comunicado de imprensa original correspondente (com link clicável <a> com target="_blank" rel="noopener noreferrer"). Exemplo:
+        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-lg my-8">
+          <h4 class="font-bold text-blue-900 mb-1 text-base">🌐 Fonte e Links Oficiais:</h4>
+          <p class="text-sm text-neutral-700">Para mais detalhes e comunicados na íntegra, acesse o site oficial: <a href="https://URL_OFICIAL" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-semibold underline hover:text-blue-800">Nome Oficial da Fonte/Empresa</a>.</p>
+        </div>
+
       Retorne a resposta EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
       {
-        "title": "Um título chamativo e jornalístico (sem aspas duplas dentro)",
-        "subtitle": "Um subtítulo que resume a matéria (1 a 2 frases)",
-        "content": "O texto completo da matéria, formatado em HTML (use tags <p>, <strong>, <h3>, etc. Não use <html> ou <body>, apenas o conteúdo interno).",
-        "excerpt": "Um resumo de 2 linhas para a home page",
+        "title": "Título chamativo",
+        "subtitle": "Subtítulo de 1 a 2 frases",
+        "content": "Conteúdo HTML completo conforme instruído",
+        "excerpt": "Resumo de 2 linhas para a home page",
         "category": "Escolha UMA das seguintes categorias: ${ALLOWED_CATEGORIES.join(', ')}",
         "tags": ["tag1", "tag2", "tag3", "tag4"],
         "imageDirective": {
-          "type": "wikipedia", // Escolha: 'wikipedia' (se for cidade, pessoa real, instituição ou empresa), 'pexels' (se for conceito genérico como negócios, tecnologia, saúde), ou 'ai' (se for conceito futurista ou abstrato)
-          "query": "Apenas o nome exato da entidade ou termo de busca" // Ex: 'Tribunal de Contas do Estado', 'Fortaleza', 'Windows', 'business meeting', 'futuristic robot'
+          "query": "Termo exato em português ou inglês para busca de fotos reais em alta resolução (ex: 'Grand Theft Auto VI', 'Fortaleza Ceará', 'Microsoft', 'Neymar')"
         }
       }
       
@@ -85,58 +95,81 @@ export default async function handler(req, res) {
 
     const articleData = JSON.parse(jsonString);
 
-    // 2. Roteador de Imagem Inteligente
-    let imageUrl = 'https://picsum.photos/1600/900';
-    const directive = articleData.imageDirective || { type: 'pexels', query: articleData.tags[0] };
-    
-    console.log(`Buscando imagem via: ${directive.type} para o termo "${directive.query}"`);
+    // 2. Busca de Imagens em Alta Definição (16:9 Widescreen)
+    const searchQuery = articleData.imageDirective?.query || articleData.tags[0] || text;
+    console.log(`Buscando imagens em alta definição para: "${searchQuery}"`);
 
-    if (directive.type === 'wikipedia') {
-      try {
-        const wikiRes = await fetch(`https://pt.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&generator=search&gsrsearch=${encodeURIComponent(directive.query)}&gsrlimit=1`);
-        const wikiData = await wikiRes.json();
-        if (wikiData.query && wikiData.query.pages) {
-          const pages = Object.values(wikiData.query.pages);
-          if (pages.length > 0 && pages[0].original) {
-            imageUrl = pages[0].original.source;
-          } else {
-            directive.type = 'pexels';
+    let coverImageUrl = '';
+    let secondaryImageUrl = '';
+
+    // Tentativa 1: Wikimedia Commons (Fotos oficiais, papéis de parede e arquivos de imprensa em 4K/Full HD)
+    try {
+      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(searchQuery)}&gsrlimit=15&prop=imageinfo&iiprop=url|size&format=json`;
+      const cRes = await fetch(commonsUrl);
+      const cData = await cRes.json();
+
+      if (cData.query && cData.query.pages) {
+        const validImages = Object.values(cData.query.pages)
+          .map(p => p.imageinfo && p.imageinfo[0])
+          .filter(info => info && info.width >= 900 && info.width > info.height && !info.url.endsWith('.svg') && !info.url.endsWith('.ogg'))
+          .sort((a, b) => b.width - a.width);
+
+        if (validImages.length > 0) {
+          coverImageUrl = validImages[0].url;
+          console.log(`Capa encontrada no Wikimedia Commons (${validImages[0].width}x${validImages[0].height}):`, coverImageUrl);
+          if (validImages.length > 1) {
+            secondaryImageUrl = validImages[1].url;
           }
-        } else {
-          directive.type = 'pexels';
         }
-      } catch (e) {
-        console.error('Erro na Wikipedia', e);
-        directive.type = 'pexels';
       }
+    } catch (e) {
+      console.error('Erro na busca do Wikimedia Commons:', e);
     }
 
-    if (directive.type === 'pexels' && process.env.PEXELS_API_KEY) {
+    // Tentativa 2: Pexels API (HD 1920x1080)
+    if (!coverImageUrl && process.env.PEXELS_API_KEY) {
       try {
-        const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(directive.query)}&per_page=1&orientation=landscape`, {
+        const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=2&orientation=landscape`, {
           headers: { 'Authorization': process.env.PEXELS_API_KEY }
         });
         const pexelsData = await pexelsRes.json();
         if (pexelsData.photos && pexelsData.photos.length > 0) {
-          imageUrl = pexelsData.photos[0].src.large2x;
-        } else {
-          directive.type = 'ai';
+          coverImageUrl = pexelsData.photos[0].src.large2x || pexelsData.photos[0].src.large;
+          console.log('Capa encontrada no Pexels:', coverImageUrl);
+          if (pexelsData.photos.length > 1) {
+            secondaryImageUrl = pexelsData.photos[1].src.large2x || pexelsData.photos[1].src.large;
+          }
         }
       } catch (e) {
-        console.error('Erro no pexels', e);
-        directive.type = 'ai';
+        console.error('Erro no Pexels:', e);
       }
     }
 
-    if (directive.type === 'ai' || (!process.env.PEXELS_API_KEY && directive.type === 'pexels')) {
-      const promptImagem = `Realistic professional news cover photo about ${directive.query}, high quality, cinematic lighting`;
-      imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptImagem)}?width=1600&height=900&nologo=true`;
+    // Tentativa 3: Pollinations AI (1600x900 Widescreen)
+    if (!coverImageUrl) {
+      const promptCapa = `Professional high quality 4k news cover photo about ${searchQuery}, cinematic lighting, photorealistic, 16:9`;
+      coverImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptCapa)}?width=1600&height=900&nologo=true`;
+      console.log('Capa gerada via IA:', coverImageUrl);
+    }
+
+    // Processar imagem secundária no corpo do artigo
+    if (secondaryImageUrl) {
+      const bodyImageHtml = `
+        <figure class="my-8">
+          <img src="${secondaryImageUrl}" alt="${articleData.title}" class="w-full rounded-xl shadow-md object-cover max-h-[480px]" />
+          <figcaption class="text-center text-xs text-neutral-500 mt-2 italic">Registro oficial relacionado à cobertura: ${searchQuery}</figcaption>
+        </figure>
+      `;
+      articleData.content = articleData.content.replace('[IMAGEM_INTERNA]', bodyImageHtml);
+    } else {
+      // Se não achou foto secundária, remove o marcador
+      articleData.content = articleData.content.replace('[IMAGEM_INTERNA]', '');
     }
 
     // 3. Salvar no Render
     const payload = {
       ...articleData,
-      imageUrl: imageUrl,
+      imageUrl: coverImageUrl,
       authorId: 1,
       isDraft: true,
       featured: false,
@@ -163,7 +196,7 @@ export default async function handler(req, res) {
     }
 
     // 4. Avisar sucesso
-    await sendMessage(chatId, `✅ *Missão Cumprida!*\n\nA matéria *"${articleData.title}"* foi gerada e salva como Rascunho no seu painel!\n\nCorra lá para revisar e publicar! 🚀`);
+    await sendMessage(chatId, `✅ *Missão Cumprida!*\n\nA matéria *"${articleData.title}"* foi gerada em Alta Definição com imagens e links oficiais e salva como Rascunho no seu painel!\n\nCorra lá para revisar e publicar! 🚀`);
     return res.status(200).json({ status: 'ok' });
 
   } catch (error) {
