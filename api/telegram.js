@@ -53,19 +53,32 @@ export default async function handler(req, res) {
     // 1. Gerar com Gemini
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const prompt = `
-      Você é um jornalista investigativo sênior de um portal de notícias de alta credibilidade chamado Alpes News.
-      O editor-chefe solicitou uma cobertura jornalística completa, profissional e detalhada sobre o seguinte assunto: "${text}"
-      
-      Estruture o conteúdo de forma rica e aprofundada:
-      - Título impactante e jornalístico.
+      Você é um jornalista investigativo e editor sênior de um portal de notícias de referência chamado Alpes News.
+      O editor-chefe enviou a seguinte pauta para cobertura: "${text}"
+
+      Analise a mensagem com atenção:
+      - Identifique se o editor indicou fontes específicas para consultar (ex: IGN, Flow Games, Rockstar, Bloomberg, The Verge, G1, etc.). Se sim, baseie a matéria nas perspectivas dessas fontes.
+      - Identifique se o editor solicitou vídeos ou trailers (ex: "coloque o trailer", "adicione vídeo").
+      - Identifique quantas fotos internas foram solicitadas (ex: "adicione 2 fotos", "mais imagens"). Se não informado, planeje 2 fotos internas.
+
+      Estrutura de Conteúdo Requerida:
+      - Título atraente, factual e jornalístico.
       - Subtítulo resumindo o fato principal.
-      - No corpo da matéria ("content"): use HTML sem <html> ou <body>. Divida em pelo menos 3 seções com subtítulos <h3>, use parágrafos <p> bem desenvolvidos, inclua citações destacadas em <blockquote class="border-l-4 border-blue-500 pl-4 my-4 italic text-neutral-600">.
-      - Insira exatamente o marcador [IMAGEM_INTERNA] entre o segundo e o terceiro bloco de texto para que possamos inserir uma foto secundária da cobertura.
-      - No final do texto, inclua SEMPRE uma caixa estilizada de 'Fontes e Links Oficiais' apontando para o site oficial real da empresa, órgão público ou comunicado de imprensa original correspondente (com link clicável <a> com target="_blank" rel="noopener noreferrer"). Exemplo:
-        <div class="bg-blue-50 border-l-4 border-blue-600 p-4 rounded-r-lg my-8">
-          <h4 class="font-bold text-blue-900 mb-1 text-base">🌐 Fonte e Links Oficiais:</h4>
-          <p class="text-sm text-neutral-700">Para mais detalhes e comunicados na íntegra, acesse o site oficial: <a href="https://URL_OFICIAL" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-semibold underline hover:text-blue-800">Nome Oficial da Fonte/Empresa</a>.</p>
-        </div>
+      - No corpo da matéria ("content"): use HTML sem <html> ou <body>.
+        * Divida em pelo menos 3 a 4 seções com subtítulos <h3> elegantes.
+        * Use parágrafos <p> ricos e aprofundados.
+        * Inclua pelo menos uma citação ou aspas destacadas em <blockquote class="border-l-4 border-blue-500 pl-4 my-4 italic text-neutral-600">.
+        * Se foi pedido vídeo/trailer ou se o tema for um grande lançamento com trailer oficial no YouTube (ex: trailers de games, filmes ou tech), forneça o ID do YouTube no campo "youtubeVideoId".
+        * Distribua os marcadores [IMAGEM_INTERNA_1], [IMAGEM_INTERNA_2] entre as seções do texto.
+        * No final da matéria, inclua SEMPRE uma caixa estilizada de 'Fontes e Apuração Editorial' referenciando com links <a> reais as fontes e empresas citadas:
+          <div class="bg-neutral-100 border border-neutral-200 p-5 rounded-xl my-8">
+            <h4 class="font-bold text-neutral-900 mb-2">🌐 Fontes e Apuração Editorial</h4>
+            <p class="text-sm text-neutral-700 mb-2">Esta reportagem foi apurada com base nas divulgações oficiais e cobertura especializada:</p>
+            <ul class="text-sm text-neutral-700 space-y-1 list-disc list-inside">
+              <li>Site Oficial: <a href="https://URL_OFICIAL" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-semibold underline hover:text-blue-800">Portal Oficial</a></li>
+              <li>Cobertura de Imprensa: <a href="https://URL_FONTE" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-semibold underline hover:text-blue-800">Veículo Consultado</a></li>
+            </ul>
+          </div>
 
       Retorne a resposta EXCLUSIVAMENTE em formato JSON com a seguinte estrutura:
       {
@@ -75,8 +88,10 @@ export default async function handler(req, res) {
         "excerpt": "Resumo de 2 linhas para a home page",
         "category": "Escolha UMA das seguintes categorias: ${ALLOWED_CATEGORIES.join(', ')}",
         "tags": ["tag1", "tag2", "tag3", "tag4"],
+        "youtubeVideoId": "ID_DO_VIDEO_YOUTUBE_OU_VAZIO",
         "imageDirective": {
-          "query": "Termo exato em português ou inglês para busca de fotos reais em alta resolução (ex: 'Grand Theft Auto VI', 'Fortaleza Ceará', 'Microsoft', 'Neymar')"
+          "query": "Termo exato em português ou inglês para busca de fotos reais em alta resolução (ex: 'Grand Theft Auto VI', 'Fortaleza Ceará', 'Microsoft', 'Neymar')",
+          "imageCount": 2
         }
       }
       
@@ -95,16 +110,16 @@ export default async function handler(req, res) {
 
     const articleData = JSON.parse(jsonString);
 
-    // 2. Busca de Imagens em Alta Definição (16:9 Widescreen)
+    // 2. Busca de Múltiplas Imagens em Alta Definição (16:9 Widescreen)
     const searchQuery = articleData.imageDirective?.query || articleData.tags[0] || text;
-    console.log(`Buscando imagens em alta definição para: "${searchQuery}"`);
+    const neededImagesCount = Math.max(2, (articleData.imageDirective?.imageCount || 2) + 1);
+    console.log(`Buscando até ${neededImagesCount} imagens em alta definição para: "${searchQuery}"`);
 
-    let coverImageUrl = '';
-    let secondaryImageUrl = '';
+    const collectedImages = [];
 
     // Tentativa 1: Wikimedia Commons (Fotos oficiais, papéis de parede e arquivos de imprensa em 4K/Full HD)
     try {
-      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(searchQuery)}&gsrlimit=15&prop=imageinfo&iiprop=url|size&format=json`;
+      const commonsUrl = `https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrnamespace=6&gsrsearch=${encodeURIComponent(searchQuery)}&gsrlimit=20&prop=imageinfo&iiprop=url|size&format=json`;
       const cRes = await fetch(commonsUrl);
       const cData = await cRes.json();
 
@@ -114,30 +129,31 @@ export default async function handler(req, res) {
           .filter(info => info && info.width >= 900 && info.width > info.height && !info.url.endsWith('.svg') && !info.url.endsWith('.ogg'))
           .sort((a, b) => b.width - a.width);
 
-        if (validImages.length > 0) {
-          coverImageUrl = validImages[0].url;
-          console.log(`Capa encontrada no Wikimedia Commons (${validImages[0].width}x${validImages[0].height}):`, coverImageUrl);
-          if (validImages.length > 1) {
-            secondaryImageUrl = validImages[1].url;
+        for (const img of validImages) {
+          if (!collectedImages.includes(img.url)) {
+            collectedImages.push(img.url);
           }
+          if (collectedImages.length >= neededImagesCount) break;
         }
       }
     } catch (e) {
       console.error('Erro na busca do Wikimedia Commons:', e);
     }
 
-    // Tentativa 2: Pexels API (HD 1920x1080)
-    if (!coverImageUrl && process.env.PEXELS_API_KEY) {
+    // Tentativa 2: Pexels API (HD 1920x1080) se precisar de mais imagens
+    if (collectedImages.length < neededImagesCount && process.env.PEXELS_API_KEY) {
       try {
-        const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=2&orientation=landscape`, {
+        const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(searchQuery)}&per_page=4&orientation=landscape`, {
           headers: { 'Authorization': process.env.PEXELS_API_KEY }
         });
         const pexelsData = await pexelsRes.json();
         if (pexelsData.photos && pexelsData.photos.length > 0) {
-          coverImageUrl = pexelsData.photos[0].src.large2x || pexelsData.photos[0].src.large;
-          console.log('Capa encontrada no Pexels:', coverImageUrl);
-          if (pexelsData.photos.length > 1) {
-            secondaryImageUrl = pexelsData.photos[1].src.large2x || pexelsData.photos[1].src.large;
+          for (const photo of pexelsData.photos) {
+            const pUrl = photo.src.large2x || photo.src.large;
+            if (pUrl && !collectedImages.includes(pUrl)) {
+              collectedImages.push(pUrl);
+            }
+            if (collectedImages.length >= neededImagesCount) break;
           }
         }
       } catch (e) {
@@ -145,28 +161,65 @@ export default async function handler(req, res) {
       }
     }
 
-    // Tentativa 3: Pollinations AI (1600x900 Widescreen)
-    if (!coverImageUrl) {
-      const promptCapa = `Professional high quality 4k news cover photo about ${searchQuery}, cinematic lighting, photorealistic, 16:9`;
-      coverImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptCapa)}?width=1600&height=900&nologo=true`;
-      console.log('Capa gerada via IA:', coverImageUrl);
+    // Tentativa 3: Pollinations AI (1600x900 Widescreen) como fallback
+    while (collectedImages.length < neededImagesCount) {
+      const idx = collectedImages.length;
+      const promptImg = `Professional high quality 4k news photo variation ${idx} about ${searchQuery}, cinematic lighting, photorealistic, 16:9`;
+      const aiUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptImg)}?width=1600&height=900&nologo=true&seed=${Date.now() + idx}`;
+      collectedImages.push(aiUrl);
     }
 
-    // Processar imagem secundária no corpo do artigo
-    if (secondaryImageUrl) {
-      const bodyImageHtml = `
-        <figure class="my-8">
-          <img src="${secondaryImageUrl}" alt="${articleData.title}" class="w-full rounded-xl shadow-md object-cover max-h-[480px]" />
-          <figcaption class="text-center text-xs text-neutral-500 mt-2 italic">Registro oficial relacionado à cobertura: ${searchQuery}</figcaption>
-        </figure>
+    const coverImageUrl = collectedImages[0] || 'https://picsum.photos/1600/900';
+
+    // 3. Processar vídeo embutido do YouTube (se houver)
+    if (articleData.youtubeVideoId && articleData.youtubeVideoId.trim() && articleData.youtubeVideoId.length >= 6) {
+      const cleanVideoId = articleData.youtubeVideoId.trim();
+      const videoEmbedHtml = `
+        <div class="my-8 aspect-video w-full rounded-xl overflow-hidden shadow-lg border border-neutral-200">
+          <iframe 
+            src="https://www.youtube-nocookie.com/embed/${cleanVideoId}" 
+            title="Vídeo Oficial" 
+            class="w-full h-full" 
+            frameborder="0" 
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" 
+            allowfullscreen>
+          </iframe>
+        </div>
       `;
-      articleData.content = articleData.content.replace('[IMAGEM_INTERNA]', bodyImageHtml);
-    } else {
-      // Se não achou foto secundária, remove o marcador
-      articleData.content = articleData.content.replace('[IMAGEM_INTERNA]', '');
+      // Insere o vídeo logo após a introdução ou no início do texto
+      if (articleData.content.includes('</h3>')) {
+        articleData.content = articleData.content.replace('</h3>', `</h3>${videoEmbedHtml}`);
+      } else {
+        articleData.content = `${videoEmbedHtml}${articleData.content}`;
+      }
     }
 
-    // 3. Salvar no Render
+    // 4. Distribuir imagens internas no corpo do artigo
+    let imageCounter = 1;
+    while (articleData.content.includes(`[IMAGEM_INTERNA_${imageCounter}]`) || articleData.content.includes('[IMAGEM_INTERNA]')) {
+      const targetTag = articleData.content.includes(`[IMAGEM_INTERNA_${imageCounter}]`) 
+        ? `[IMAGEM_INTERNA_${imageCounter}]` 
+        : '[IMAGEM_INTERNA]';
+      
+      const internalImgUrl = collectedImages[imageCounter] || collectedImages[1];
+      if (internalImgUrl) {
+        const bodyImageHtml = `
+          <figure class="my-8">
+            <img src="${internalImgUrl}" alt="${articleData.title}" class="w-full rounded-xl shadow-md object-cover max-h-[500px]" />
+            <figcaption class="text-center text-xs text-neutral-500 mt-2 italic">Registro oficial da cobertura: ${searchQuery}</figcaption>
+          </figure>
+        `;
+        articleData.content = articleData.content.replace(targetTag, bodyImageHtml);
+      } else {
+        articleData.content = articleData.content.replace(targetTag, '');
+      }
+      imageCounter++;
+    }
+
+    // Limpar quaisquer marcadores residuais
+    articleData.content = articleData.content.replace(/\[IMAGEM_INTERNA_\d+\]/g, '');
+
+    // 5. Salvar no Render
     const payload = {
       ...articleData,
       imageUrl: coverImageUrl,
@@ -195,8 +248,8 @@ export default async function handler(req, res) {
       throw new Error('Falha ao salvar no backend.');
     }
 
-    // 4. Avisar sucesso
-    await sendMessage(chatId, `✅ *Missão Cumprida!*\n\nA matéria *"${articleData.title}"* foi gerada em Alta Definição com imagens e links oficiais e salva como Rascunho no seu painel!\n\nCorra lá para revisar e publicar! 🚀`);
+    // 6. Avisar sucesso
+    await sendMessage(chatId, `✅ *Missão Cumprida!*\n\nA matéria *"${articleData.title}"* foi gerada no padrão IGN (alta resolução, fotos e fontes oficiais) e salva como Rascunho no seu painel!\n\nCorra lá para revisar e publicar! 🚀`);
     return res.status(200).json({ status: 'ok' });
 
   } catch (error) {
