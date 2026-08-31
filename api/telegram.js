@@ -48,32 +48,116 @@ export default async function handler(req, res) {
       return res.status(200).json({ status: 'ok' });
     }
 
-    await sendMessage(chatId, `⏳ Pesquisando e gerando matéria incrível sobre: *${text}*...\nAguarde uns segundinhos!`);
-
-    // 1. Gerar com Gemini
+    // Inicializar IA e função com Fallback automático multi-modelos
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    const todayStr = new Date().toLocaleDateString('pt-BR');
+
+    async function generateWithFallback(aiInstance, promptText, useSearch = false) {
+      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      let lastErr = null;
+      for (const m of candidateModels) {
+        try {
+          console.log(`Tentando com o modelo: ${m} (Busca na Web: ${useSearch})...`);
+          const config = { temperature: 0.7 };
+          if (useSearch) {
+            config.tools = [{ googleSearch: {} }];
+          }
+          const res = await aiInstance.models.generateContent({
+            model: m,
+            contents: promptText,
+            config
+          });
+          if (res && res.text) {
+            console.log(`Sucesso com o modelo: ${m}`);
+            return res;
+          }
+        } catch (e) {
+          console.warn(`Modelo ${m} falhou. Tentando próximo... Detalhe:`, e.message);
+          lastErr = e;
+          if (useSearch) {
+            try {
+              const resNoSearch = await aiInstance.models.generateContent({
+                model: m,
+                contents: promptText,
+                config: { temperature: 0.7 }
+              });
+              if (resNoSearch && resNoSearch.text) return resNoSearch;
+            } catch (e2) {}
+          }
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+      }
+      throw lastErr || new Error('Todos os modelos de IA estão temporariamente indisponíveis.');
+    }
+
+    // PASSO 1: Classificador de Intenção (Conversa/Dúvida vs. Criar Artigo)
+    const intentPrompt = `
+      Você é o assistente editorial de inteligência artificial do portal Alpes News.
+      Data de referência de hoje: ${todayStr}.
+      O editor-chefe do portal enviou a seguinte mensagem no Telegram: "${text}"
+
+      Analise a intenção da mensagem:
+      1. "CHAT": O usuário está conversando, fazendo perguntas ou tirando dúvidas (ex: "quem é a nova ceo?", "o que você acha disso?", "pq a imagem veio errada?"), comentando ou reclamando.
+      2. "WRITE_ARTICLE": O usuário está dando uma ordem para criar/escrever uma matéria jornalística no portal (ex: "escreva sobre...", "crie uma matéria sobre...", "notícia sobre...", "faça um artigo...", ou enviou uma pauta explícita para publicação).
+
+      Se for "CHAT": Responda à dúvida ou comentário do usuário diretamente em português, com dados atualizados e tom profissional de um assistente de redação de jornalismo.
+      Se for "WRITE_ARTICLE": Extraia o tema limpo da pauta.
+
+      Retorne EXCLUSIVAMENTE um JSON:
+      {
+        "intent": "CHAT" ou "WRITE_ARTICLE",
+        "reply": "Sua resposta direta para o usuário se for CHAT",
+        "topic": "Tema limpo da matéria se for WRITE_ARTICLE"
+      }
+      Importante: Retorne APENAS o JSON válido sem blocos de código markdown.
+    `;
+
+    const intentRes = await generateWithFallback(ai, intentPrompt, true);
+    let intentJsonStr = intentRes.text.trim();
+    if (intentJsonStr.startsWith('```json')) intentJsonStr = intentJsonStr.replace(/^```json/, '').replace(/```$/, '').trim();
+    else if (intentJsonStr.startsWith('```')) intentJsonStr = intentJsonStr.replace(/^```/, '').replace(/```$/, '').trim();
+
+    let decision = { intent: 'WRITE_ARTICLE', topic: text };
+    try {
+      decision = JSON.parse(intentJsonStr);
+    } catch (e) {
+      console.warn('Falha ao decodificar JSON de intenção, assumindo WRITE_ARTICLE:', intentJsonStr);
+    }
+
+    // Se o usuário apenas fez uma pergunta ou bate-papo, responde no chat sem criar artigo!
+    if (decision.intent === 'CHAT') {
+      await sendMessage(chatId, decision.reply || "Entendido, chefe! Como posso te ajudar com a redação hoje?");
+      return res.status(200).json({ status: 'chat_responded' });
+    }
+
+    // PASSO 2: O usuário quer criar uma matéria!
+    const cleanTopic = decision.topic || text;
+    await sendMessage(chatId, `⏳ Apurando fatos recentes (máximo 7 dias) e gerando matéria sobre: *${cleanTopic}*...\nAguarde uns segundinhos!`);
+
+    // 2. Gerar Matéria com Regra Estrita de Recência (Máximo 7 Dias) e Pesquisa na Web
     const prompt = `
       Você é um jornalista investigativo e editor sênior de um portal de notícias de referência chamado Alpes News.
+      Data de publicação (HOJE): ${todayStr}.
       O editor-chefe enviou a seguinte pauta para cobertura: "${text}"
 
-      Analise a mensagem com atenção:
-      - Identifique se o editor indicou fontes específicas para consultar (ex: IGN, Flow Games, Rockstar, Bloomberg, The Verge, G1, etc.). Se sim, baseie a matéria nas perspectivas dessas fontes.
-      - Identifique se o editor solicitou vídeos ou trailers (ex: "coloque o trailer", "adicione vídeo").
-      - Identifique quantas fotos internas foram solicitadas (ex: "adicione 2 fotos", "mais imagens"). Se não informado, planeje 2 fotos internas.
+      REGRA CRÍTICA DE RECÊNCIA (MÁXIMO 7 DIAS):
+      - Você está cobrindo notícias factuais para publicação IMEDIATA.
+      - A matéria DEVE focar exclusivamente em acontecimentos, anúncios, declarações ou coberturas jornalísticas dos ÚLTIMOS 7 DIAS (a contar de ${todayStr}).
+      - É ESTRITAMENTE PROIBIDO noticiar acontecimentos antigos ou cargos de anos anteriores como se fossem de hoje. Se o tema envolver histórico, contextualize explicitamente como retrospectiva ou aniversário.
 
       Estrutura de Conteúdo Requerida:
       - Título atraente, factual e jornalístico.
-      - Subtítulo resumindo o fato principal.
+      - Subtítulo resumindo o fato principal recente.
       - No corpo da matéria ("content"): use HTML sem <html> ou <body>.
         * Divida em pelo menos 3 a 4 seções com subtítulos <h3> elegantes.
-        * Use parágrafos <p> ricos e aprofundados.
+        * Use parágrafos <p> ricos e aprofundados baseados nos fatos dos últimos 7 dias.
         * Inclua pelo menos uma citação ou aspas destacadas em <blockquote class="border-l-4 border-blue-500 pl-4 my-4 italic text-neutral-600">.
-        * Se foi pedido vídeo/trailer ou se o tema for um grande lançamento com trailer oficial no YouTube (ex: trailers de games, filmes ou tech), forneça o ID do YouTube no campo "youtubeVideoId".
+        * Se o tema for um grande lançamento com trailer ou vídeo oficial relevante no YouTube, forneça o ID do YouTube no campo "youtubeVideoId".
         * Distribua os marcadores [IMAGEM_INTERNA_1], [IMAGEM_INTERNA_2] entre as seções do texto.
-        * No final da matéria, inclua SEMPRE uma caixa estilizada de 'Fontes e Apuração Editorial' referenciando com links <a> reais as fontes e empresas citadas:
+        * No final da matéria, inclua SEMPRE uma caixa estilizada de 'Fontes e Apuração Editorial' referenciando com links <a> reais os sites e veículos consultados:
           <div class="bg-neutral-100 border border-neutral-200 p-5 rounded-xl my-8">
             <h4 class="font-bold text-neutral-900 mb-2">🌐 Fontes e Apuração Editorial</h4>
-            <p class="text-sm text-neutral-700 mb-2">Esta reportagem foi apurada com base nas divulgações oficiais e cobertura especializada:</p>
+            <p class="text-sm text-neutral-700 mb-2">Esta reportagem foi apurada com base nas divulgações oficiais e cobertura especializada dos últimos dias:</p>
             <ul class="text-sm text-neutral-700 space-y-1 list-disc list-inside">
               <li>Site Oficial: <a href="https://URL_OFICIAL" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-semibold underline hover:text-blue-800">Portal Oficial</a></li>
               <li>Cobertura de Imprensa: <a href="https://URL_FONTE" target="_blank" rel="noopener noreferrer" class="text-blue-600 font-semibold underline hover:text-blue-800">Veículo Consultado</a></li>
@@ -98,32 +182,7 @@ export default async function handler(req, res) {
       Importante: Retorne APENAS o JSON válido. Não inclua \`\`\`json antes ou depois.
     `;
 
-    // Função com Fallback automático para evitar erro 503 de alta demanda do Google
-    async function generateWithFallback(aiInstance, promptText) {
-      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
-      let lastErr = null;
-      for (const m of candidateModels) {
-        try {
-          console.log(`Tentando gerar matéria com o modelo: ${m}...`);
-          const res = await aiInstance.models.generateContent({
-            model: m,
-            contents: promptText,
-            config: { temperature: 0.7 }
-          });
-          if (res && res.text) {
-            console.log(`Sucesso com o modelo: ${m}`);
-            return res;
-          }
-        } catch (e) {
-          console.warn(`Modelo ${m} indisponível ou em alta demanda (503). Alternando... Detalhe:`, e.message);
-          lastErr = e;
-          await new Promise(resolve => setTimeout(resolve, 800));
-        }
-      }
-      throw lastErr || new Error('Todos os modelos de IA estão temporariamente indisponíveis.');
-    }
-
-    const aiRes = await generateWithFallback(ai, prompt);
+    const aiRes = await generateWithFallback(ai, prompt, true);
 
     let jsonString = aiRes.text.trim();
     if (jsonString.startsWith('```json')) jsonString = jsonString.replace(/^```json/, '').replace(/```$/, '').trim();
