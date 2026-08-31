@@ -93,7 +93,7 @@ export default async function handler(req, res) {
 
     if (directive.type === 'wikipedia') {
       try {
-        const wikiRes = await fetch(\`https://pt.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&generator=search&gsrsearch=\${encodeURIComponent(directive.query)}&gsrlimit=1\`);
+        const wikiRes = await fetch(`https://pt.wikipedia.org/w/api.php?action=query&prop=pageimages&format=json&piprop=original&generator=search&gsrsearch=${encodeURIComponent(directive.query)}&gsrlimit=1`);
         const wikiData = await wikiRes.json();
         if (wikiData.query && wikiData.query.pages) {
           const pages = Object.values(wikiData.query.pages);
@@ -113,7 +113,7 @@ export default async function handler(req, res) {
 
     if (directive.type === 'pexels' && process.env.PEXELS_API_KEY) {
       try {
-        const pexelsRes = await fetch(\`https://api.pexels.com/v1/search?query=\${encodeURIComponent(directive.query)}&per_page=1&orientation=landscape\`, {
+        const pexelsRes = await fetch(`https://api.pexels.com/v1/search?query=${encodeURIComponent(directive.query)}&per_page=1&orientation=landscape`, {
           headers: { 'Authorization': process.env.PEXELS_API_KEY }
         });
         const pexelsData = await pexelsRes.json();
@@ -129,8 +129,8 @@ export default async function handler(req, res) {
     }
 
     if (directive.type === 'ai' || (!process.env.PEXELS_API_KEY && directive.type === 'pexels')) {
-      const promptImagem = \`Realistic professional news cover photo about \${directive.query}, high quality, cinematic lighting\`;
-      imageUrl = \`https://image.pollinations.ai/prompt/\${encodeURIComponent(promptImagem)}?width=1600&height=900&nologo=true\`;
+      const promptImagem = `Realistic professional news cover photo about ${directive.query}, high quality, cinematic lighting`;
+      imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(promptImagem)}?width=1600&height=900&nologo=true`;
     }
 
     // 3. Salvar no Render
