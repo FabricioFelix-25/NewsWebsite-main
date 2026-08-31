@@ -297,3 +297,138 @@
     box-shadow: 0 0 0 2px rgb(var(--section-primary) / 0.3);
   }
 }
+
+/* ========================================================
+   ADMIN AREA: Alto Contraste & Suporte Perfeito a Dark Mode
+   Garante que nenhum texto fique invisível ou apagado
+   ======================================================== */
+
+.admin-scope {
+  color: #111827;
+}
+
+/* Modo Escuro no Admin */
+.dark .admin-scope {
+  color: #f1f5f9;
+}
+
+.dark .admin-scope .bg-white {
+  background-color: #111827 !important;
+  color: #f1f5f9 !important;
+  border-color: #1f2937 !important;
+}
+
+.dark .admin-scope .bg-neutral-50 {
+  background-color: #0f172a !important;
+  color: #94a3b8 !important;
+}
+
+.dark .admin-scope .bg-neutral-100 {
+  background-color: #070b12 !important;
+}
+
+.dark .admin-scope .border-neutral-200,
+.dark .admin-scope .border-neutral-300 {
+  border-color: #1f2937 !important;
+}
+
+.dark .admin-scope .text-neutral-900,
+.dark .admin-scope .text-neutral-800 {
+  color: #f8fafc !important;
+}
+
+.dark .admin-scope .text-neutral-700 {
+  color: #cbd5e1 !important;
+}
+
+.dark .admin-scope .text-neutral-600,
+.dark .admin-scope .text-neutral-500 {
+  color: #94a3b8 !important;
+}
+
+.dark .admin-scope input,
+.dark .admin-scope select,
+.dark .admin-scope textarea,
+.dark .admin-scope .input-field {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark .admin-scope input::placeholder,
+.dark .admin-scope textarea::placeholder {
+  color: #64748b !important;
+}
+
+.dark .admin-scope table {
+  background-color: #111827 !important;
+}
+
+.dark .admin-scope thead {
+  background-color: #0f172a !important;
+}
+
+.dark .admin-scope thead th {
+  color: #94a3b8 !important;
+}
+
+.dark .admin-scope tbody tr {
+  background-color: #111827 !important;
+  border-color: #1f2937 !important;
+}
+
+.dark .admin-scope tbody tr:hover {
+  background-color: #1e293b !important;
+}
+
+.dark .admin-scope td {
+  color: #f1f5f9 !important;
+  border-color: #1f2937 !important;
+}
+
+.dark .admin-scope hr {
+  border-color: #1f2937 !important;
+}
+
+/* Editor de Texto Rico (Rich Text / Quill) no Admin */
+.dark .admin-scope .ql-toolbar {
+  background-color: #0f172a !important;
+  border-color: #334155 !important;
+}
+
+.dark .admin-scope .ql-toolbar .ql-stroke {
+  stroke: #cbd5e1 !important;
+}
+
+.dark .admin-scope .ql-toolbar .ql-fill {
+  fill: #cbd5e1 !important;
+}
+
+.dark .admin-scope .ql-toolbar .ql-picker {
+  color: #cbd5e1 !important;
+}
+
+.dark .admin-scope .ql-container {
+  background-color: #111827 !important;
+  border-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+.dark .admin-scope .ql-editor {
+  color: #f8fafc !important;
+}
+
+/* Modo Claro no Admin: Força contraste impecável para garantir 100% de legibilidade */
+html:not(.dark) .admin-scope {
+  color: #111827 !important;
+}
+
+html:not(.dark) .admin-scope input,
+html:not(.dark) .admin-scope select,
+html:not(.dark) .admin-scope textarea,
+html:not(.dark) .admin-scope .input-field {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
