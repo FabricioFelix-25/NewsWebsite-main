@@ -76,12 +76,19 @@ const Navbar: React.FC = () => {
   const location = useLocation();
 
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      const offset = window.scrollY;
-      setScrolled(offset > 50);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          const isScrolled = window.scrollY > 30;
+          setScrolled((prev) => (prev !== isScrolled ? isScrolled : prev));
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
 
-    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -99,10 +106,10 @@ const Navbar: React.FC = () => {
     currentCategorySlug === category.slug ||
     category.subcategories.some((subcategory) => subcategory.slug === currentCategorySlug);
 
-  const navClass = `sticky top-0 z-50 transition-all duration-300 border-b ${
+  const navClass = `sticky top-0 z-50 border-b transition-[padding,box-shadow] duration-200 ${
     scrolled 
-      ? 'bg-white/90 dark:bg-[#0b0f19]/90 backdrop-blur-md shadow-md border-neutral-200/80 dark:border-slate-800/80 py-2.5' 
-      : 'bg-white/75 dark:bg-[#0b0f19]/75 backdrop-blur-sm border-neutral-200/40 dark:border-slate-800/40 py-3.5'
+      ? 'bg-white dark:bg-[#0b0f19] shadow-sm border-neutral-200 dark:border-slate-800 py-2.5' 
+      : 'bg-white dark:bg-[#0b0f19] border-transparent py-3.5'
   }`;
 
   const getCategoryStyle = (category: string, isActive: boolean, isMobile = false) => {
@@ -189,7 +196,7 @@ const Navbar: React.FC = () => {
                   {category.name}
                   <ChevronDown className="ml-1 h-4 w-4" />
                 </NavLink>
-                <div className="absolute left-0 mt-1 w-52 rounded-xl shadow-xl bg-white dark:bg-slate-900 ring-1 ring-black/5 dark:ring-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 border border-neutral-100 dark:border-slate-800 py-1.5 backdrop-blur-md">
+                <div className="absolute left-0 mt-1 w-52 rounded-xl shadow-xl bg-white dark:bg-slate-900 ring-1 ring-black/5 dark:ring-white/10 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 border border-neutral-100 dark:border-slate-800 py-1.5">
                   <div className="py-1">
                     {category.subcategories.map((sub) => (
                       <NavLink

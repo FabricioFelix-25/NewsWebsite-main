@@ -99,7 +99,7 @@ const HomePage: React.FC = () => {
 
   return (
     <div>
-      <section className="mb-8 bg-white dark:bg-slate-900/80 rounded-xl border border-neutral-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-950/50 backdrop-blur-sm transition-colors">
+      <section className="mb-8 bg-white dark:bg-slate-900 rounded-xl border border-neutral-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-950/50 transition-colors">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">AlpesNews</h1>
