@@ -98,11 +98,32 @@ export default async function handler(req, res) {
       Importante: Retorne APENAS o JSON válido. Não inclua \`\`\`json antes ou depois.
     `;
 
-    const aiRes = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
-      contents: prompt,
-      config: { temperature: 0.7 }
-    });
+    // Função com Fallback automático para evitar erro 503 de alta demanda do Google
+    async function generateWithFallback(aiInstance, promptText) {
+      const candidateModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+      let lastErr = null;
+      for (const m of candidateModels) {
+        try {
+          console.log(`Tentando gerar matéria com o modelo: ${m}...`);
+          const res = await aiInstance.models.generateContent({
+            model: m,
+            contents: promptText,
+            config: { temperature: 0.7 }
+          });
+          if (res && res.text) {
+            console.log(`Sucesso com o modelo: ${m}`);
+            return res;
+          }
+        } catch (e) {
+          console.warn(`Modelo ${m} indisponível ou em alta demanda (503). Alternando... Detalhe:`, e.message);
+          lastErr = e;
+          await new Promise(resolve => setTimeout(resolve, 800));
+        }
+      }
+      throw lastErr || new Error('Todos os modelos de IA estão temporariamente indisponíveis.');
+    }
+
+    const aiRes = await generateWithFallback(ai, prompt);
 
     let jsonString = aiRes.text.trim();
     if (jsonString.startsWith('```json')) jsonString = jsonString.replace(/^```json/, '').replace(/```$/, '').trim();
