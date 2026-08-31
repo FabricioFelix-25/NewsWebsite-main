@@ -89,7 +89,7 @@ export default async function handler(req, res) {
     let imageUrl = 'https://picsum.photos/1600/900';
     const directive = articleData.imageDirective || { type: 'pexels', query: articleData.tags[0] };
     
-    console.log(\`Buscando imagem via: \${directive.type} para o termo "\${directive.query}"\`);
+    console.log(`Buscando imagem via: ${directive.type} para o termo "${directive.query}"`);
 
     if (directive.type === 'wikipedia') {
       try {
