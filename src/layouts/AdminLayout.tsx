@@ -20,11 +20,11 @@ const AdminLayout: React.FC = () => {
   }
   
   return (
-    <div className="admin-scope min-h-screen bg-neutral-100 dark:bg-[#070b12] text-neutral-900 dark:text-slate-100 flex transition-colors">
+    <div className="min-h-screen bg-neutral-100 flex">
       <AdminSidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
         <AdminHeader />
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-neutral-100 dark:bg-[#070b12] p-6 transition-colors">
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-neutral-100 p-6">
           <div className="container mx-auto">
             <Outlet />
           </div>
