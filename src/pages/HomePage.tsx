@@ -24,29 +24,35 @@ const HomePage: React.FC = () => {
   const [selectedInterest, setSelectedInterest] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
+  const loadCategoryGroup = async (groupKey: 'tech' | 'geopolitics' | 'programming', limit = 6) => {
+    const slugs = CATEGORY_GROUPS[groupKey];
+    const grouped = await Promise.all(slugs.map((slug) => getArticlesByCategory(slug)));
+    const merged = new Map<string, Article>();
+
+    grouped.flat().forEach((article) => {
+      merged.set(article.id, article);
+    });
+
+    return [...merged.values()]
+      .sort((a, b) => new Date(b.updatedAt || b.publishedAt).getTime() - new Date(a.updatedAt || a.publishedAt).getTime())
+      .slice(0, limit);
+  };
+
   useEffect(() => {
     const fetchArticles = async () => {
       setIsLoading(true);
       try {
-        const [featured, latest] = await Promise.all([
-          getFeaturedArticles(),
-          getLatestArticles(50) // Busca os 50 mais recentes em uma unica requisicao!
-        ]);
+        const featured = await getFeaturedArticles();
+        const latest = await getLatestArticles(18);
+        const tech = await loadCategoryGroup('tech', 6);
+        const geo = await loadCategoryGroup('geopolitics', 6);
+        const prog = await loadCategoryGroup('programming', 6);
 
         setFeaturedArticles(featured);
         setLatestArticles(latest);
-
-        // Filtra localmente sem derrubar o servidor com multiplas requisicoes
-        const getGroup = (groupKey: 'tech' | 'geopolitics' | 'programming') => {
-          const slugs = CATEGORY_GROUPS[groupKey];
-          return latest
-            .filter((a) => slugs.includes(a.category))
-            .slice(0, 6);
-        };
-
-        setTechArticles(getGroup('tech'));
-        setGeopoliticsArticles(getGroup('geopolitics'));
-        setProgrammingArticles(getGroup('programming'));
+        setTechArticles(tech);
+        setGeopoliticsArticles(geo);
+        setProgrammingArticles(prog);
       } catch (error) {
         console.error('Erro ao buscar artigos:', error);
       } finally {
@@ -85,19 +91,19 @@ const HomePage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="py-20 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800 dark:border-white"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800"></div>
       </div>
     );
   }
 
   return (
     <div>
-      <section className="mb-8 bg-white dark:bg-slate-900 rounded-xl border border-neutral-200 dark:border-slate-800 p-6 shadow-sm dark:shadow-slate-950/50 transition-colors">
+      <section className="mb-8 bg-white rounded-lg border border-neutral-200 p-5">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-neutral-900 dark:text-white">AlpesNews</h1>
-            <p className="text-neutral-600 dark:text-slate-400 mt-1">
+            <h1 className="text-2xl font-bold">AlpesNews</h1>
+            <p className="text-neutral-600 mt-1">
               Descubra conteudos por interesse e acompanhe os temas que importam para voce.
             </p>
           </div>
@@ -107,10 +113,10 @@ const HomePage: React.FC = () => {
                 key={interest.value}
                 type="button"
                 onClick={() => setSelectedInterest(interest.value)}
-                className={`px-3.5 py-1.5 rounded-full text-sm font-medium border transition-all ${
+                className={`px-3 py-2 rounded-full text-sm border transition-colors ${
                   selectedInterest === interest.value
-                    ? 'bg-neutral-900 dark:bg-sky-600 text-white border-neutral-900 dark:border-sky-600 shadow-md shadow-sky-600/20'
-                    : 'bg-white dark:bg-slate-800 text-neutral-700 dark:text-slate-300 border-neutral-200 dark:border-slate-700 hover:bg-neutral-100 dark:hover:bg-slate-700'
+                    ? 'bg-neutral-900 text-white border-neutral-900'
+                    : 'bg-white text-neutral-700 border-neutral-300 hover:bg-neutral-100'
                 }`}
               >
                 {interest.label}

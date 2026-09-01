@@ -21,15 +21,15 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
   return (
     <form onSubmit={handleSubmit} className="flex items-center">
       <div className="relative flex-grow">
-        <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-          <Search className="h-5 w-5 text-neutral-400 dark:text-slate-500" />
+        <div className="absolute inset-y-0 left-0 flex items-center pl-3">
+          <Search className="h-5 w-5 text-neutral-400" />
         </div>
         <input
           type="text"
           placeholder="Buscar materias..."
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          className="input-field pl-10 bg-white dark:bg-slate-800 border-neutral-300 dark:border-slate-700 text-neutral-900 dark:text-white placeholder-neutral-400 dark:placeholder-slate-500"
+          className="input-field pl-10"
           autoFocus
         />
       </div>
@@ -37,7 +37,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onClose }) => {
         <button
           type="button"
           onClick={onClose}
-          className="ml-2 p-2 rounded-full text-neutral-600 dark:text-slate-300 hover:bg-neutral-100 dark:hover:bg-slate-800 transition-colors"
+          className="ml-2 p-2 rounded-full hover:bg-neutral-100"
           aria-label="Fechar busca"
         >
           <X className="h-5 w-5" />

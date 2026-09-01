@@ -96,8 +96,8 @@ const SearchPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="py-20 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800 dark:border-white"></div>
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800"></div>
       </div>
     );
   }
