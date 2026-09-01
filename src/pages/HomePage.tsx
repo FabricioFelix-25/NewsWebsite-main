@@ -24,37 +24,29 @@ const HomePage: React.FC = () => {
   const [selectedInterest, setSelectedInterest] = useState<string>('all');
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadCategoryGroup = async (groupKey: 'tech' | 'geopolitics' | 'programming', limit = 6) => {
-    const slugs = CATEGORY_GROUPS[groupKey];
-    const grouped = await Promise.all(slugs.map((slug) => getArticlesByCategory(slug)));
-    const merged = new Map<string, Article>();
-
-    grouped.flat().forEach((article) => {
-      merged.set(article.id, article);
-    });
-
-    return [...merged.values()]
-      .sort((a, b) => new Date(b.updatedAt || b.publishedAt).getTime() - new Date(a.updatedAt || a.publishedAt).getTime())
-      .slice(0, limit);
-  };
-
   useEffect(() => {
     const fetchArticles = async () => {
       setIsLoading(true);
       try {
-        const [featured, latest, tech, geo, prog] = await Promise.all([
+        const [featured, latest] = await Promise.all([
           getFeaturedArticles(),
-          getLatestArticles(18),
-          loadCategoryGroup('tech', 6),
-          loadCategoryGroup('geopolitics', 6),
-          loadCategoryGroup('programming', 6)
+          getLatestArticles(50) // Busca os 50 mais recentes em uma unica requisicao!
         ]);
 
         setFeaturedArticles(featured);
         setLatestArticles(latest);
-        setTechArticles(tech);
-        setGeopoliticsArticles(geo);
-        setProgrammingArticles(prog);
+
+        // Filtra localmente sem derrubar o servidor com multiplas requisicoes
+        const getGroup = (groupKey: 'tech' | 'geopolitics' | 'programming') => {
+          const slugs = CATEGORY_GROUPS[groupKey];
+          return latest
+            .filter((a) => slugs.includes(a.category))
+            .slice(0, 6);
+        };
+
+        setTechArticles(getGroup('tech'));
+        setGeopoliticsArticles(getGroup('geopolitics'));
+        setProgrammingArticles(getGroup('programming'));
       } catch (error) {
         console.error('Erro ao buscar artigos:', error);
       } finally {
