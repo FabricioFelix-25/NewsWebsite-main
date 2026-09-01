@@ -13,6 +13,7 @@ import {
 import { useNews } from '../contexts/NewsContext';
 import ArticleGrid from '../components/ArticleGrid';
 import ArticleFilter from '../components/ArticleFilter';
+import { ArticleGridSkeleton } from '../components/SkeletonLoader';
 import { Article } from '../types';
 import {
   CATEGORY_GROUPS,
@@ -166,21 +167,13 @@ const CategoryPage: React.FC = () => {
     setArticles(filtered);
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800"></div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <header className="mb-8 text-center">
         <div className="flex justify-center items-center gap-3 mb-3">
-          <HeaderIcon className="h-9 w-9" style={{ color: 'rgb(var(--section-primary))' }} />
-          <h1 className="text-4xl md:text-5xl font-bold">{pageTitle}</h1>
-          <Sparkles className="h-9 w-9" style={{ color: 'rgb(var(--section-primary))' }} />
+          <HeaderIcon className="h-9 w-9" style={{ color: 'rgb(var(--section-primary, 31 41 55))' }} />
+          <h1 className="text-4xl md:text-5xl font-bold text-neutral-900">{pageTitle}</h1>
+          <Sparkles className="h-9 w-9" style={{ color: 'rgb(var(--section-primary, 31 41 55))' }} />
         </div>
         <p className="text-neutral-600 text-lg max-w-3xl mx-auto">{pageDescription}</p>
         {resolvedGroup && groupHighlights[resolvedGroup] && (
@@ -188,11 +181,11 @@ const CategoryPage: React.FC = () => {
             {groupHighlights[resolvedGroup].map((item) => (
               <span
                 key={item}
-                className="px-3 py-1 text-sm rounded-full border"
+                className="px-3 py-1 text-sm rounded-full border font-medium"
                 style={{
-                  borderColor: 'rgb(var(--section-primary) / 0.35)',
-                  color: 'rgb(var(--section-primary))',
-                  backgroundColor: 'rgb(var(--section-primary) / 0.08)',
+                  borderColor: 'rgb(var(--section-primary, 31 41 55) / 0.35)',
+                  color: 'rgb(var(--section-primary, 31 41 55))',
+                  backgroundColor: 'rgb(var(--section-primary, 31 41 55) / 0.08)',
                 }}
               >
                 {item}
@@ -204,12 +197,14 @@ const CategoryPage: React.FC = () => {
 
       <ArticleFilter categories={filterCategories} authors={authors} onFilter={handleFilter} />
 
-      {articles.length > 0 ? (
+      {isLoading ? (
+        <ArticleGridSkeleton count={6} columns={3} />
+      ) : articles.length > 0 ? (
         <ArticleGrid articles={articles} />
       ) : (
-        <div className="py-12 text-center">
+        <div className="py-12 text-center bg-white rounded-2xl border border-neutral-200/80 my-6">
           <BarChart3 className="h-10 w-10 mx-auto mb-3 text-neutral-400" />
-          <p className="text-neutral-600">Nenhum artigo encontrado para este filtro.</p>
+          <p className="text-neutral-600 font-medium">Nenhum artigo encontrado para este filtro.</p>
         </div>
       )}
     </div>

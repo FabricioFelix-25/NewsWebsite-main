@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useNews } from '../contexts/NewsContext';
 import ArticleGrid from '../components/ArticleGrid';
 import ArticleFilter from '../components/ArticleFilter';
+import { ArticleGridSkeleton } from '../components/SkeletonLoader';
 import { Article } from '../types';
 import { Search as SearchIcon } from 'lucide-react';
 
@@ -94,19 +95,11 @@ const SearchPage: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800"></div>
-      </div>
-    );
-  }
-
   return (
     <div>
       <header className="mb-8">
-        <h1 className="text-3xl md:text-4xl font-bold flex items-center">
-          <SearchIcon className="h-8 w-8 mr-3" />
+        <h1 className="text-3xl md:text-4xl font-bold flex items-center text-neutral-900">
+          <SearchIcon className="h-8 w-8 mr-3 text-neutral-700" />
           Resultados da busca
         </h1>
         {searchQuery && (
@@ -115,19 +108,21 @@ const SearchPage: React.FC = () => {
           </p>
         )}
       </header>
-      
+
       <ArticleFilter 
         categories={categories} 
         authors={authors} 
         onFilter={handleFilter} 
       />
       
-      {articles.length > 0 ? (
+      {isLoading ? (
+        <ArticleGridSkeleton count={6} columns={3} />
+      ) : articles.length > 0 ? (
         <ArticleGrid articles={articles} />
       ) : (
-        <div className="py-12 text-center">
-          <p className="text-xl font-medium mb-2">Nenhum resultado encontrado</p>
-          <p className="text-neutral-600">
+        <div className="py-12 text-center bg-white rounded-2xl border border-neutral-200/80 my-6">
+          <p className="text-xl font-medium mb-2 text-neutral-900">Nenhum resultado encontrado</p>
+          <p className="text-neutral-600 text-sm">
             Tente outros termos ou navegue pelas categorias.
           </p>
         </div>

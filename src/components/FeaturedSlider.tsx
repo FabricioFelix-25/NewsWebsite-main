@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock } from 'lucide-react';
 import { Article } from '../types';
+import { getCategoryLabel } from '../utils/categoryColors';
 
 interface FeaturedSliderProps {
   articles: Article[];
@@ -9,116 +10,136 @@ interface FeaturedSliderProps {
 
 const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [isAnimating, setIsAnimating] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      goToNext();
-    }, 5000);
-    
-    return () => clearInterval(interval);
-  }, [currentIndex, articles.length]);
-
-  const goToPrev = () => {
-    if (isAnimating) return;
-    setIsAnimating(true);
+  const goToPrev = useCallback(() => {
     setCurrentIndex((prev) => (prev === 0 ? articles.length - 1 : prev - 1));
-    setTimeout(() => setIsAnimating(false), 500);
-  };
+  }, [articles.length]);
 
-  const goToNext = () => {
-    if (isAnimating) return;
-    setIsAnimating(true);
+  const goToNext = useCallback(() => {
     setCurrentIndex((prev) => (prev === articles.length - 1 ? 0 : prev + 1));
-    setTimeout(() => setIsAnimating(false), 500);
-  };
+  }, [articles.length]);
 
   const goToSlide = (index: number) => {
-    if (isAnimating) return;
-    setIsAnimating(true);
     setCurrentIndex(index);
-    setTimeout(() => setIsAnimating(false), 500);
   };
+
+  useEffect(() => {
+    if (articles.length <= 1 || isPaused) return;
+
+    const interval = setInterval(() => {
+      goToNext();
+    }, 6000);
+
+    return () => clearInterval(interval);
+  }, [articles.length, isPaused, goToNext]);
 
   if (!articles.length) return null;
 
   return (
-    <div className="relative h-[500px] md:h-[600px] overflow-hidden rounded-xl shadow-lg mb-8">
-      {articles.map((article, index) => (
-        <div
-          key={article.id}
-          className={`absolute inset-0 transition-transform duration-500 ease-in-out ${
-            index === currentIndex ? 'translate-x-0' : index < currentIndex ? '-translate-x-full' : 'translate-x-full'
-          }`}
-        >
-          <div className="relative h-full w-full">
-            <img
-              src={article.imageUrl}
-              alt={article.title}
-              className="h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
-            <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 text-white">
-              <div className="mb-2">
-                <Link 
-                  to={`/category/${article.category}`}
-                  className={`inline-block px-3 py-1 rounded-full text-xs font-medium bg-opacity-70`}
-                  style={{ backgroundColor: `rgb(var(--section-primary))` }}
-                >
-                  {article.category}
-                </Link>
-                <span className="ml-2 text-sm text-neutral-300">{new Date(article.publishedAt).toLocaleDateString()}</span>
+    <div 
+      className="relative h-[420px] sm:h-[480px] md:h-[540px] lg:h-[580px] overflow-hidden rounded-2xl shadow-xl mb-10 group bg-neutral-900"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+    >
+      {articles.map((article, index) => {
+        const isActive = index === currentIndex;
+        return (
+          <div
+            key={article.id || index}
+            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
+              isActive ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'
+            }`}
+          >
+            <div className="relative h-full w-full">
+              <img
+                src={article.imageUrl || 'https://placehold.co/1200x600?text=AlpesNews'}
+                alt={article.title}
+                loading={isActive ? 'eager' : 'lazy'}
+                decoding="async"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = 'https://placehold.co/1200x600?text=AlpesNews';
+                }}
+                className="h-full w-full object-cover transform scale-100 group-hover:scale-105 transition-transform duration-1000 ease-out"
+              />
+              
+              {/* High-contrast gradient overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/95 via-black/60 via-45% to-black/20" />
+
+              {/* Text content container */}
+              <div className="absolute bottom-0 left-0 right-0 p-5 sm:p-8 md:p-10 text-white flex flex-col justify-end max-w-4xl">
+                <div className="flex items-center gap-3 mb-3">
+                  <Link 
+                    to={`/category/${article.category}`}
+                    className="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/20 backdrop-blur-md hover:bg-white/30 transition-colors duration-200"
+                  >
+                    {getCategoryLabel(article.category)}
+                  </Link>
+                  <span className="flex items-center text-xs sm:text-sm text-neutral-300">
+                    <Clock className="w-3.5 h-3.5 mr-1" />
+                    {new Date(article.publishedAt).toLocaleDateString('pt-BR')}
+                  </span>
+                </div>
+
+                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-2 md:mb-3 line-clamp-2 md:line-clamp-3 leading-tight drop-shadow-md">
+                  <Link to={`/article/${article.slug}`} className="hover:text-neutral-200 transition-colors">
+                    {article.title}
+                  </Link>
+                </h2>
+
+                <p className="text-neutral-300 text-xs sm:text-sm md:text-base mb-4 line-clamp-2 md:line-clamp-3 leading-relaxed hidden sm:block max-w-3xl">
+                  {article.excerpt}
+                </p>
+
+                <div className="pt-1">
+                  <Link 
+                    to={`/article/${article.slug}`} 
+                    className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-white text-neutral-900 hover:bg-neutral-100 hover:shadow-lg transition-all duration-200"
+                  >
+                    Ler matéria completa
+                  </Link>
+                </div>
               </div>
-              <h2 className="text-2xl md:text-4xl font-bold mb-2">
-                <Link to={`/article/${article.slug}`} className="hover:underline">
-                  {article.title}
-                </Link>
-              </h2>
-              <p className="text-neutral-200 mb-4 line-clamp-2 md:line-clamp-3">
-                {article.excerpt}
-              </p>
-              <Link 
-                to={`/article/${article.slug}`} 
-                className="inline-block px-4 py-2 rounded-md font-medium bg-white text-black hover:bg-opacity-90 transition-colors duration-200"
-              >
-                Read More
-              </Link>
             </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
-      {/* Navigation arrows */}
-      <button
-        onClick={goToPrev}
-        className="absolute top-1/2 left-4 -translate-y-1/2 p-2 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors duration-200"
-        aria-label="Previous slide"
-      >
-        <ChevronLeft className="h-6 w-6" />
-      </button>
-      <button
-        onClick={goToNext}
-        className="absolute top-1/2 right-4 -translate-y-1/2 p-2 rounded-full bg-black/30 hover:bg-black/50 text-white transition-colors duration-200"
-        aria-label="Next slide"
-      >
-        <ChevronRight className="h-6 w-6" />
-      </button>
-
-      {/* Indicator dots */}
-      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex space-x-2">
-        {articles.map((_, index) => (
+      {/* Navigation arrows (shown when multiple slides) */}
+      {articles.length > 1 && (
+        <>
           <button
-            key={index}
-            onClick={() => goToSlide(index)}
-            className={`w-3 h-3 rounded-full transition-colors duration-200 ${
-              index === currentIndex ? 'bg-white' : 'bg-white/50 hover:bg-white/80'
-            }`}
-            aria-label={`Go to slide ${index + 1}`}
-          />
-        ))}
-      </div>
+            onClick={goToPrev}
+            className="absolute top-1/2 left-3 sm:left-4 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white transition-all duration-200 z-20 opacity-80 hover:opacity-100 hover:scale-110"
+            aria-label="Notícia anterior"
+          >
+            <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
+          </button>
+          <button
+            onClick={goToNext}
+            className="absolute top-1/2 right-3 sm:right-4 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white transition-all duration-200 z-20 opacity-80 hover:opacity-100 hover:scale-110"
+            aria-label="Próxima notícia"
+          >
+            <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
+          </button>
+
+          {/* Indicator dots */}
+          <div className="absolute bottom-4 right-6 sm:right-10 flex space-x-2 z-20">
+            {articles.map((_, index) => (
+              <button
+                key={index}
+                onClick={() => goToSlide(index)}
+                className={`h-2 rounded-full transition-all duration-300 ${
+                  index === currentIndex ? 'w-6 bg-white' : 'w-2 bg-white/50 hover:bg-white/80'
+                }`}
+                aria-label={`Ir para destaque ${index + 1}`}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 };
 
-export default FeaturedSlider;
+export default FeaturedSlider;

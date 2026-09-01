@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { Bot, Clock, Tag, Eye } from 'lucide-react';
+import { Bot, Clock, Tag } from 'lucide-react';
 import { useNews } from '../contexts/NewsContext';
 import ArticleGrid from '../components/ArticleGrid';
 import { Article } from '../types';
-import { trackArticleView, getArticleViews, fetchArticlesByAuthor } from '../api';
+import { trackArticleView, fetchArticlesByAuthor } from '../api';
 import { getCategoryLabel, getSectionFromCategory } from '../utils/categoryColors';
 
 const ArticlePage: React.FC = () => {
@@ -14,7 +14,6 @@ const ArticlePage: React.FC = () => {
   const [relatedArticles, setRelatedArticles] = useState<Article[]>([]);
   const [authorArticles, setAuthorArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [views, setViews] = useState(0);
 
   useEffect(() => {
     const fetchArticle = async () => {
@@ -27,10 +26,8 @@ const ArticlePage: React.FC = () => {
           setArticle(fetchedArticle);
           
           if (fetchedArticle) {
-            // Track view
-            await trackArticleView(fetchedArticle.id);
-            const viewCount = await getArticleViews(fetchedArticle.id);
-            setViews(viewCount);
+            // Track view silenciosamente para estatísticas internas
+            trackArticleView(fetchedArticle.id);
             
             // Fetch related articles by category
             const related = await getRelatedArticles(fetchedArticle.id, fetchedArticle.category);
@@ -78,19 +75,33 @@ const ArticlePage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800"></div>
+      <div className="max-w-4xl mx-auto animate-pulse space-y-6">
+        <div className="h-4 w-24 bg-neutral-200 rounded" />
+        <div className="h-10 md:h-14 bg-neutral-200 rounded-lg w-full" />
+        <div className="h-6 bg-neutral-200 rounded w-3/4" />
+        <div className="flex items-center gap-4">
+          <div className="h-8 w-8 rounded-full bg-neutral-200" />
+          <div className="h-4 w-32 bg-neutral-200 rounded" />
+          <div className="h-4 w-24 bg-neutral-200 rounded" />
+        </div>
+        <div className="aspect-[16/9] w-full rounded-2xl bg-neutral-200" />
+        <div className="space-y-3 pt-4">
+          <div className="h-4 bg-neutral-200 rounded w-full" />
+          <div className="h-4 bg-neutral-200 rounded w-full" />
+          <div className="h-4 bg-neutral-200 rounded w-5/6" />
+          <div className="h-4 bg-neutral-200 rounded w-4/6" />
+        </div>
       </div>
     );
   }
 
   if (!article) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center">
-        <h2 className="text-2xl font-bold mb-4">Artigo nao encontrado</h2>
-        <p className="text-neutral-600 mb-6">O conteudo que voce procurou nao existe ou foi removido.</p>
-        <Link to="/" className="btn btn-primary">
-          Voltar para inicio
+      <div className="min-h-[50vh] flex flex-col items-center justify-center bg-white rounded-2xl border border-neutral-200/80 p-8 text-center my-8">
+        <h2 className="text-2xl font-bold mb-2 text-neutral-900">Artigo não encontrado</h2>
+        <p className="text-neutral-600 mb-6 max-w-md">O conteúdo que você procurou não existe, está em rascunho ou foi removido.</p>
+        <Link to="/" className="px-5 py-2.5 bg-neutral-900 text-white rounded-lg font-medium hover:bg-neutral-800 transition-colors">
+          Voltar para início
         </Link>
       </div>
     );
@@ -129,10 +140,6 @@ const ArticlePage: React.FC = () => {
             <div className="flex items-center mr-6 mb-2">
               <Clock className="h-4 w-4 mr-1" />
               <span>{article?.publishedAt && new Date(article.publishedAt).toLocaleDateString('pt-BR')}</span>
-            </div>
-            <div className="flex items-center mb-2">
-              <Eye className="h-4 w-4 mr-1" />
-              <span>{views} visualizacoes</span>
             </div>
           </div>
           <div className="aspect-[16/9] overflow-hidden rounded-lg">
