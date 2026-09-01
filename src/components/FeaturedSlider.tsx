@@ -53,11 +53,13 @@ const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
         >
           <div className="relative h-full w-full">
             <img
-              src={article.imageUrl}
-              alt={article.title}
-              className="h-full w-full object-cover"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent"></div>
+            src={article.imageUrl || 'https://placehold.co/1200x600?text=Destaque'}
+            alt={article.title}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            decoding="async"
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
             <div className="absolute bottom-0 left-0 right-0 p-6 md:p-8 text-white">
               <div className="mb-2">
                 <Link 

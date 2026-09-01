@@ -81,10 +81,10 @@
   }
 
   .section-tech .article-card {
-    @apply backdrop-blur-sm bg-white/90;
+    @apply bg-white;
     border: 1px solid rgba(var(--color-tech-primary), 0.1);
-    box-shadow: 0 8px 32px -8px rgba(var(--color-tech-primary), 0.3);
-    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px -8px rgba(var(--color-tech-primary), 0.3);
+    transition: all 0.3s ease;
   }
 
   .section-tech .article-card:hover {

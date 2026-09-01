@@ -19,10 +19,12 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article }) => {
   return (
     <article className="article-card topic-colored group" style={cardStyle}>
       <Link to={`/article/${article.slug}`} className="block">
-        <div className="aspect-video overflow-hidden">
+        <div className="aspect-video overflow-hidden bg-neutral-100 dark:bg-slate-800">
           <img
             src={article.imageUrl || 'https://placehold.co/800x450?text=Noticia'}
             alt={article.title}
+            loading="lazy"
+            decoding="async"
             className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
           />
         </div>

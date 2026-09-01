@@ -42,11 +42,13 @@ const HomePage: React.FC = () => {
     const fetchArticles = async () => {
       setIsLoading(true);
       try {
-        const featured = await getFeaturedArticles();
-        const latest = await getLatestArticles(18);
-        const tech = await loadCategoryGroup('tech', 6);
-        const geo = await loadCategoryGroup('geopolitics', 6);
-        const prog = await loadCategoryGroup('programming', 6);
+        const [featured, latest, tech, geo, prog] = await Promise.all([
+          getFeaturedArticles(),
+          getLatestArticles(18),
+          loadCategoryGroup('tech', 6),
+          loadCategoryGroup('geopolitics', 6),
+          loadCategoryGroup('programming', 6)
+        ]);
 
         setFeaturedArticles(featured);
         setLatestArticles(latest);
