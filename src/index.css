@@ -46,12 +46,13 @@
     --color-neutral-900: 17 24 39;
   }
   
-  body {
+  html, body {
     @apply bg-neutral-50 text-neutral-900 font-sans;
     font-feature-settings: "liga" 1, "calt" 1;
+    min-height: 100vh;
   }
 
-  .dark body,
+  html.dark,
   html.dark body {
     @apply bg-[#0b0f19] text-slate-100;
   }
