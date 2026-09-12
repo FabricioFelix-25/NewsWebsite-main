@@ -1,4 +1,5 @@
 import { timingSafeEqual } from 'node:crypto';
+import { getWebhookSecret } from '../server/lib/webhook-auth.js';
 import { GoogleGenAI } from '@google/genai';
 import Parser from 'rss-parser';
 import { buildDraftPayload, buildTelegramNotification, filterRecentItems, safeHttpsUrl } from '../server/lib/editorial.js';
@@ -10,7 +11,7 @@ export const config = { maxDuration: 300 };
 const handledUpdates = new Map();
 
 export function isAuthorizedWebhook(req, env = process.env) {
-  const secret = env.TELEGRAM_WEBHOOK_SECRET;
+  const secret = getWebhookSecret(env);
   const supplied = req.headers?.['x-telegram-bot-api-secret-token'];
   if (!secret || typeof supplied !== 'string') return false;
   const expected = Buffer.from(secret);
@@ -46,7 +47,7 @@ Use pesquisa para afirmações factuais e não invente notícias.`,
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(200).send('AlpesNews: webhook ativo.');
-  if (!process.env.TELEGRAM_WEBHOOK_SECRET) return res.status(503).json({ error: 'Webhook não configurado.' });
+  if (!getWebhookSecret()) return res.status(503).json({ error: 'Webhook não configurado.' });
   if (!isAuthorizedWebhook(req)) return res.status(401).json({ error: 'Unauthorized' });
   const message = req.body?.message;
   if (!message?.text) return res.status(200).json({ status: 'ignored' });

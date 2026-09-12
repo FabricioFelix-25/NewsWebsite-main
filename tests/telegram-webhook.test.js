@@ -121,9 +121,24 @@ afterEach(() => {
 describe('autorização do webhook sem acesso a serviços externos', () => {
   it('recusa secret ausente na configuração antes de qualquer saída', async () => {
     vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '');
+    vi.stubEnv('TELEGRAM_BOT_TOKEN', '');
     const res = response();
     await handler(request(), res);
     expect(res.status).toHaveBeenCalledWith(503);
+    expectNoOutgoing();
+  });
+
+
+  it('usa segredo derivado no servidor sem aceitar o token original como header', async () => {
+    vi.stubEnv('TELEGRAM_WEBHOOK_SECRET', '');
+    const { getWebhookSecret } = await import('../server/lib/webhook-auth.js');
+    const derived = getWebhookSecret();
+    const rejected = response();
+    await handler(request({ headers: { 'x-telegram-bot-api-secret-token': process.env.TELEGRAM_BOT_TOKEN }, body: {} }), rejected);
+    expect(rejected.status).toHaveBeenCalledWith(401);
+    const accepted = response();
+    await handler(request({ headers: { 'x-telegram-bot-api-secret-token': derived }, body: {} }), accepted);
+    expect(accepted.json).toHaveBeenCalledWith({ status: 'ignored' });
     expectNoOutgoing();
   });
 
