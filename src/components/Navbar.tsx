@@ -80,7 +80,8 @@ const Navbar: React.FC = () => {
       setScrolled(offset > 50);
     };
 
-    window.addEventListener('scroll', handleScroll);
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
@@ -98,8 +99,8 @@ const Navbar: React.FC = () => {
     currentCategorySlug === category.slug ||
     category.subcategories.some((subcategory) => subcategory.slug === currentCategorySlug);
 
-  const navClass = `sticky top-0 z-50 transition-all duration-300 ${
-    scrolled ? 'bg-white shadow-md py-2' : 'bg-transparent py-4'
+  const navClass = `sticky top-0 z-50 py-4 transition-[background-color,box-shadow] duration-300 ${
+    scrolled ? 'bg-white shadow-md' : 'bg-neutral-50'
   }`;
 
   const getCategoryStyle = (category: string, isActive: boolean, isMobile = false) => {

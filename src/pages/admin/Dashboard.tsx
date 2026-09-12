@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import { PlusCircle, FileText, Layers3, TrendingUp, Calendar, BarChart3, Gauge, Rocket } from 'lucide-react';
 import { useNews } from '../../contexts/NewsContext';
 import ArticleList from '../../components/admin/ArticleList';
@@ -7,7 +7,8 @@ import { Article } from '../../types';
 import { getCategoryLabel } from '../../utils/categoryColors';
 
 const Dashboard: React.FC = () => {
-  const { getAllArticles, deleteArticle, getStats, updateArticle } = useNews();
+  const { getAllArticles, deleteArticle, getStats } = useNews();
+  const navigate = useNavigate();
   const [articles, setArticles] = useState<Article[]>([]);
   const [stats, setStats] = useState({
     totalArticles: 0,
@@ -18,11 +19,10 @@ const Dashboard: React.FC = () => {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const fetchedArticles = await getAllArticles();
-      const fetchedStats = await getStats();
+      const [fetchedArticles, fetchedStats] = await Promise.all([getAllArticles(), getStats()]);
       setArticles(fetchedArticles);
       setStats(fetchedStats);
     } catch (error) {
@@ -30,11 +30,11 @@ const Dashboard: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [getAllArticles, getStats]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    void loadData();
+  }, [loadData]);
 
   const publicationRate = useMemo(() => {
     if (!stats.totalArticles) {
@@ -90,23 +90,7 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handlePublishArticle = async (id: string) => {
-    const target = articles.find((article) => article.id === id);
-    if (!target) {
-      return;
-    }
-
-    try {
-      await updateArticle(id, {
-        ...target,
-        authorId: target.authorId || target.author?.id,
-        isDraft: false,
-      });
-      await loadData();
-    } catch (error) {
-      console.error('Erro ao publicar artigo:', error);
-    }
-  };
+  const handlePublishArticle = (id: string) => navigate(`/admin/articles/${id}/preview`);
 
   if (isLoading) {
     return (

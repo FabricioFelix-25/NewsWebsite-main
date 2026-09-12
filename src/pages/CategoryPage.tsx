@@ -62,12 +62,14 @@ function dedupeArticles(articles: Article[]): Article[] {
 
 const CategoryPage: React.FC = () => {
   const { categorySlug } = useParams<{ categorySlug: string }>();
-  const { getArticlesByCategory, getAuthors } = useNews();
+  const { getArticlesByCategory } = useNews();
   const [allArticles, setAllArticles] = useState<Article[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [authors, setAuthors] = useState<string[]>([]);
   const [filterCategories, setFilterCategories] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   const resolvedGroup = useMemo(
     () => (categorySlug ? getGroupForCategory(categorySlug) : null),
@@ -102,6 +104,7 @@ const CategoryPage: React.FC = () => {
   const HeaderIcon = sectionToIcon[sectionKey] || sectionToIcon.default;
 
   useEffect(() => {
+    let active = true;
     const fetchCategoryData = async () => {
       if (!categorySlug) {
         setIsLoading(false);
@@ -109,6 +112,7 @@ const CategoryPage: React.FC = () => {
       }
 
       setIsLoading(true);
+      setLoadError(false);
       try {
         const categoriesToLoad =
           isGroupPage && resolvedGroup ? CATEGORY_GROUPS[resolvedGroup] : [categorySlug];
@@ -118,7 +122,8 @@ const CategoryPage: React.FC = () => {
         );
 
         const mergedArticles = dedupeArticles(fetchedGroups.flat());
-        const authorsList = await getAuthors();
+        if (!active) return;
+        const authorsList = [...new Set(mergedArticles.map(article => article.author?.name).filter((name): name is string => Boolean(name)))];
 
         setAllArticles(mergedArticles);
         setArticles(mergedArticles);
@@ -126,15 +131,18 @@ const CategoryPage: React.FC = () => {
         setFilterCategories(categoriesToLoad);
       } catch (error) {
         console.error('Erro ao buscar artigos da categoria:', error);
+        if (!active) return;
+        setLoadError(true);
         setAllArticles([]);
         setArticles([]);
       } finally {
-        setIsLoading(false);
+        if (active) setIsLoading(false);
       }
     };
 
     fetchCategoryData();
-  }, [categorySlug, getArticlesByCategory, getAuthors, isGroupPage, resolvedGroup]);
+    return () => { active = false; };
+  }, [categorySlug, getArticlesByCategory, isGroupPage, resolvedGroup, retry]);
 
   const handleFilter = (filters: { category?: string; author?: string; date?: string }) => {
     let filtered = [...allArticles];
@@ -168,7 +176,7 @@ const CategoryPage: React.FC = () => {
   };
 
   return (
-    <div>
+    <div aria-busy={isLoading}>
       <header className="mb-8 text-center">
         <div className="flex justify-center items-center gap-3 mb-3">
           <HeaderIcon className="h-9 w-9" style={{ color: 'rgb(var(--section-primary, 31 41 55))' }} />
@@ -195,12 +203,17 @@ const CategoryPage: React.FC = () => {
         )}
       </header>
 
-      <ArticleFilter categories={filterCategories} authors={authors} onFilter={handleFilter} />
+      <ArticleFilter key={categorySlug} categories={filterCategories} authors={authors} onFilter={handleFilter} />
 
       {isLoading ? (
-        <ArticleGridSkeleton count={6} columns={3} />
+        <ArticleGridSkeleton count={6} columns={3} showTitle={false} />
+      ) : loadError ? (
+        <div role="alert" className="py-12 text-center bg-white rounded-2xl border border-neutral-200/80 my-6">
+          <p>Não foi possível carregar esta categoria.</p>
+          <button type="button" className="btn btn-outline" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button>
+        </div>
       ) : articles.length > 0 ? (
-        <ArticleGrid articles={articles} />
+        <ArticleGrid articles={articles} priorityImages={3} />
       ) : (
         <div className="py-12 text-center bg-white rounded-2xl border border-neutral-200/80 my-6">
           <BarChart3 className="h-10 w-10 mx-auto mb-3 text-neutral-400" />

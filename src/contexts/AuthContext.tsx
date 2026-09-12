@@ -104,6 +104,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         const response = await fetch(buildApiUrl('/auth/me'), {
           method: 'GET',
+          signal: AbortSignal.timeout(45000),
           headers: {
             Accept: 'application/json',
             Authorization: `Bearer ${token}`,
@@ -131,6 +132,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         };
         setUser(userData);
         localStorage.setItem('user', JSON.stringify(userData));
+      } catch {
+        // A failed network request must not leave an unhandled rejection or authenticate cached user data.
+        setUser(null);
       } finally {
         setIsLoading(false);
       }
@@ -216,6 +220,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
     localStorage.removeItem('user');
     clearAuthToken();
+    window.dispatchEvent(new Event('auth:logout'));
   };
 
   return (

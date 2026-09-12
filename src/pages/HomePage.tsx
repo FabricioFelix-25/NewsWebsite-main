@@ -16,20 +16,25 @@ const interests = [
 ];
 
 const HomePage: React.FC = () => {
-  const { getFeaturedArticles, getLatestArticles } = useNews();
-  const [featuredArticles, setFeaturedArticles] = useState<Article[]>([]);
-  const [allArticles, setAllArticles] = useState<Article[]>([]);
+  const { getFeaturedArticles, getLatestArticles, getCachedHomeData } = useNews();
+  const [initialData] = useState(getCachedHomeData);
+  const [featuredArticles, setFeaturedArticles] = useState<Article[]>(() =>
+    initialData ? (initialData.featured.length ? initialData.featured : initialData.latest.slice(0, 3)) : []);
+  const [allArticles, setAllArticles] = useState<Article[]>(() => initialData?.latest.slice(0, 50) || []);
   const [selectedInterest, setSelectedInterest] = useState<string>('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!initialData);
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
 
   useEffect(() => {
     let isMounted = true;
 
     const fetchAllData = async () => {
+      setLoadError(false);
       try {
         // Busca paralela rápida (apenas 2 requisições em paralelo em vez de 14 em cascata)
         const [featured, latest] = await Promise.all([
-          getFeaturedArticles(),
+          getFeaturedArticles().catch(() => [] as Article[]),
           getLatestArticles(50),
         ]);
 
@@ -39,6 +44,7 @@ const HomePage: React.FC = () => {
         }
       } catch (error) {
         console.error('Erro ao carregar matérias:', error);
+        if (isMounted) setLoadError(true);
       } finally {
         if (isMounted) {
           setIsLoading(false);
@@ -51,7 +57,7 @@ const HomePage: React.FC = () => {
     return () => {
       isMounted = false;
     };
-  }, [getFeaturedArticles, getLatestArticles]);
+  }, [getFeaturedArticles, getLatestArticles, retry]);
 
   // Derivação instantânea em memória (0ms de latência)
   const techArticles = useMemo(() => {
@@ -79,16 +85,16 @@ const HomePage: React.FC = () => {
       return allArticles.slice(0, 9);
     }
     if (selectedInterest === 'tech') {
-      return techArticles;
+      return techArticles.slice(0, 9);
     }
     if (selectedInterest === 'geopolitics') {
-      return geopoliticsArticles;
+      return geopoliticsArticles.slice(0, 9);
     }
     if (selectedInterest === 'programming') {
-      return programmingArticles;
+      return programmingArticles.slice(0, 9);
     }
     if (selectedInterest === 'games') {
-      return gamesArticles;
+      return gamesArticles.slice(0, 9);
     }
     return allArticles.filter((article) => article.category === selectedInterest).slice(0, 9);
   }, [selectedInterest, allArticles, techArticles, geopoliticsArticles, programmingArticles, gamesArticles]);
@@ -100,7 +106,7 @@ const HomePage: React.FC = () => {
   }, [allArticles]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" aria-busy={isLoading}>
       {/* Barra de Filtro de Interesses */}
       <section className="bg-white rounded-2xl border border-neutral-200/80 p-5 shadow-sm">
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
@@ -132,6 +138,15 @@ const HomePage: React.FC = () => {
         </div>
       </section>
 
+      {loadError && (
+        <div role="alert" className="rounded-2xl border border-neutral-200 bg-white p-8 text-center">
+          <p>Não foi possível carregar as notícias. Tente novamente em instantes.</p>
+          <button type="button" className="btn btn-outline" onClick={() => { setIsLoading(true); setRetry(value => value + 1); }}>
+            Tentar novamente
+          </button>
+        </div>
+      )}
+
       {/* Destaque Principal (Hero Slider) */}
       {isLoading ? (
         <SliderSkeleton />
@@ -141,7 +156,7 @@ const HomePage: React.FC = () => {
 
       {/* Grid Principal - Baseado no Interesse */}
       {isLoading ? (
-        <ArticleGridSkeleton count={6} columns={3} />
+        <ArticleGridSkeleton count={9} columns={3} />
       ) : (
         <ArticleGrid
           articles={interestArticles}
@@ -149,6 +164,10 @@ const HomePage: React.FC = () => {
           viewAll={selectedInterest === 'all' ? '/category/trending' : `/category/${selectedInterest}`}
           columns={3}
         />
+      )}
+
+      {!isLoading && !loadError && allArticles.length === 0 && (
+        <p className="rounded-2xl border border-neutral-200 bg-white p-8 text-center">Novas notícias serão publicadas em breve.</p>
       )}
 
       {/* Seção Mais Lidas */}

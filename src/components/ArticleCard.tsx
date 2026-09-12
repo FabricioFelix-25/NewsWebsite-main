@@ -7,10 +7,12 @@ import { getCategoryLabel, getTopicColorTokens } from '../utils/categoryColors';
 interface ArticleCardProps {
   article: Article;
   compact?: boolean;
+  priorityImage?: boolean;
 }
 
-const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false }) => {
-  const [imageError, setImageError] = useState(false);
+const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false, priorityImage = false }) => {
+  const [failedImage, setFailedImage] = useState('');
+  const [loadedImage, setLoadedImage] = useState('');
   const colorTokens = getTopicColorTokens(article.category);
   const cardStyle = {
     '--section-primary': `var(${colorTokens.primary})`,
@@ -18,21 +20,28 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false }) =
     '--section-accent': `var(${colorTokens.accent})`,
   } as React.CSSProperties;
 
-  const fallbackImage = 'https://placehold.co/800x450/1e293b/ffffff?text=AlpesNews';
-  const displayImage = imageError || !article.imageUrl ? fallbackImage : article.imageUrl;
+  const hasImage = Boolean(article.imageUrl && failedImage !== article.imageUrl);
+  const image = hasImage ? (
+    <img
+      src={article.imageUrl}
+      alt={article.title}
+      width={800}
+      height={450}
+      loading={priorityImage ? 'eager' : 'lazy'}
+      decoding="async"
+      onError={() => setFailedImage(article.imageUrl)}
+      onLoad={() => setLoadedImage(article.imageUrl)}
+      className={`w-full h-full object-cover transition-[transform,opacity] duration-300 group-hover:scale-105 ${loadedImage === article.imageUrl ? 'opacity-100' : 'opacity-0'}`}
+    />
+  ) : (
+    <span className="flex h-full w-full items-center justify-center bg-neutral-100 text-neutral-500 text-xs font-semibold" aria-label="Matéria sem imagem">AlpesNews</span>
+  );
 
   if (compact) {
     return (
       <article className="article-card topic-colored group p-3 flex flex-row gap-3 items-center rounded-xl bg-white transition-all duration-200 hover:shadow-md" style={cardStyle}>
         <Link to={`/article/${article.slug}`} className="block flex-shrink-0 w-24 h-20 sm:w-28 sm:h-24 overflow-hidden rounded-lg bg-neutral-100">
-          <img
-            src={displayImage}
-            alt={article.title}
-            loading="lazy"
-            decoding="async"
-            onError={() => setImageError(true)}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-          />
+          {image}
         </Link>
         <div className="flex-1 min-w-0">
           <div className="flex items-center text-xs mb-1">
@@ -62,14 +71,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false }) =
   return (
     <article className="article-card topic-colored group flex flex-col h-full rounded-xl bg-white overflow-hidden transition-all duration-300" style={cardStyle}>
       <Link to={`/article/${article.slug}`} className="block overflow-hidden relative bg-neutral-100 aspect-video">
-        <img
-          src={displayImage}
-          alt={article.title}
-          loading="lazy"
-          decoding="async"
-          onError={() => setImageError(true)}
-          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-        />
+        {image}
       </Link>
       <div className="p-4 sm:p-5 flex flex-col flex-1">
         <div className="flex items-center text-xs mb-2.5">
@@ -90,25 +92,30 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false }) =
           </span>
         </div>
         
-        <h3 className="text-lg sm:text-xl font-bold mb-2 line-clamp-2 leading-tight text-neutral-900">
+        <h3 className="text-lg sm:text-xl font-bold mb-2 line-clamp-2 leading-tight min-h-[2.5em] text-neutral-900">
           <Link to={`/article/${article.slug}`} className="hover:underline">
             {article.title}
           </Link>
         </h3>
         
-        <p className="text-neutral-600 text-sm line-clamp-2 sm:line-clamp-3 mb-4 flex-1 leading-relaxed">
+        <p className="text-neutral-600 text-sm line-clamp-2 sm:line-clamp-3 mb-4 flex-1 leading-relaxed min-h-[3.25em] sm:min-h-[4.875em]">
           {article.excerpt}
         </p>
 
         <div className="flex items-center pt-3 border-t border-neutral-100 mt-auto">
-          <div className="h-7 w-7 rounded-full overflow-hidden mr-2.5 bg-neutral-200 flex-shrink-0">
-            <img
-              src={article.author?.avatarUrl || 'https://placehold.co/80x80/64748b/ffffff?text=A'}
-              alt={article.author?.name || 'Autor'}
-              loading="lazy"
-              decoding="async"
-              className="h-full w-full object-cover"
-            />
+          <div className="h-7 w-7 rounded-full overflow-hidden mr-2.5 bg-neutral-200 flex-shrink-0 flex items-center justify-center text-xs" aria-hidden="true">
+            {article.author?.avatarUrl ? (
+              <img
+                src={article.author.avatarUrl}
+                alt=""
+                width={28}
+                height={28}
+                loading="lazy"
+                decoding="async"
+                onError={(event) => { event.currentTarget.hidden = true; }}
+                className="h-full w-full object-cover"
+              />
+            ) : (article.author?.name || 'Redação').charAt(0)}
           </div>
           <span className="text-xs font-medium text-neutral-700 truncate">
             {article.author?.name || 'Redação AlpesNews'}

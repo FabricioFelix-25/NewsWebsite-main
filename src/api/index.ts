@@ -83,25 +83,25 @@ function getErrorMessage(payload: unknown, status: number): string {
   return `Erro HTTP ${status}`;
 }
 
-async function handleFetch(path: string, options?: RequestInit): Promise<unknown> {
+async function handleFetch(path: string, options?: RequestInit, authenticated = true): Promise<unknown> {
   try {
     const hasFormData = options?.body instanceof FormData;
-    const token = getAuthToken();
-    const authHeader = token ? { Authorization: `Bearer ${token}` } : {};
+    const token = authenticated ? getAuthToken() : '';
+    const headers = new Headers(options?.headers);
+    headers.set('Accept', 'application/json');
+    if (options?.body && !hasFormData && !headers.has('Content-Type')) {
+      headers.set('Content-Type', 'application/json');
+    }
+    if (token) headers.set('Authorization', `Bearer ${token}`);
     const response = await fetch(buildApiUrl(path), {
       ...options,
-      headers: {
-        Accept: 'application/json',
-        ...(hasFormData ? {} : { 'Content-Type': 'application/json' }),
-        ...authHeader,
-        ...options?.headers,
-      },
+      headers,
     });
 
     const payload = await parseResponse(response);
 
     if (!response.ok) {
-      if (response.status === 401 || response.status === 403) {
+      if (authenticated && response.status === 401) {
         clearAuthToken();
         localStorage.removeItem('user');
         window.dispatchEvent(new Event('auth:logout'));
@@ -132,7 +132,7 @@ function normalizeAuthor(raw: unknown): Author {
   };
 }
 
-function normalizeArticle(raw: unknown): Article {
+export function normalizeArticle(raw: unknown): Article {
   const article = (raw || {}) as Record<string, unknown>;
   const author = article.author ? normalizeAuthor(article.author) : undefined;
 
@@ -244,13 +244,18 @@ export async function getArticleViews(articleId: string): Promise<number> {
 }
 
 export async function fetchArticles(): Promise<Article[]> {
-  const response = await handleFetch('/articles?page=0&size=100');
+  const response = await handleFetch('/articles?page=0&size=100&summary=true', undefined, false);
   return normalizeArticlePageResponse(response);
 }
 
 export async function fetchAdminArticles(): Promise<Article[]> {
-  const response = await handleFetch('/articles/admin?page=0&size=300');
-  return normalizeArticlePageResponse(response);
+  const first = await handleFetch('/articles/admin?page=0&size=100', { cache: 'no-store' });
+  const articles = normalizeArticlePageResponse(first);
+  const totalPages = Math.max(1, Number((first as { totalPages?: number })?.totalPages || 1));
+  for (let page = 1; page < totalPages; page++) {
+    articles.push(...normalizeArticlePageResponse(await handleFetch(`/articles/admin?page=${page}&size=100`, { cache: 'no-store' })));
+  }
+  return articles;
 }
 
 export async function fetchArticleById(id: string): Promise<Article> {
@@ -259,31 +264,32 @@ export async function fetchArticleById(id: string): Promise<Article> {
 }
 
 export async function fetchArticleBySlug(slug: string): Promise<Article> {
-  const article = await handleFetch(`/articles/slug/${slug}`);
+  const article = await handleFetch(`/articles/slug/${encodeURIComponent(slug)}`, undefined, false);
   return normalizeArticle(article);
 }
 
 export async function fetchFeaturedArticles(): Promise<Article[]> {
-  const response = await handleFetch('/articles/featured');
+  const response = await handleFetch('/articles/featured?summary=true', undefined, false);
   return Array.isArray(response) ? response.map(normalizeArticle) : [];
 }
 
 export async function fetchArticlesByCategory(category: string): Promise<Article[]> {
-  const response = await handleFetch(`/articles/category/${category}?page=0&size=100`);
+  const response = await handleFetch(`/articles/category/${encodeURIComponent(category)}?page=0&size=100&summary=true`, undefined, false);
   return normalizeArticlePageResponse(response);
 }
 
 export async function fetchArticlesByAuthor(authorId: string): Promise<Article[]> {
-  const response = await handleFetch(`/articles/author/${authorId}?page=0&size=100`);
+  const response = await handleFetch(`/articles/author/${encodeURIComponent(authorId)}?page=0&size=100&summary=true`, undefined, false);
   return normalizeArticlePageResponse(response);
 }
 
 export async function searchArticles(query: string, tag?: string): Promise<Article[]> {
   const params = new URLSearchParams();
+  params.set('summary', 'true');
   if (query) params.append('q', query);
   if (tag) params.append('tag', tag);
 
-  const response = await handleFetch(`/articles/search?${params.toString()}`);
+  const response = await handleFetch(`/articles/search?${params.toString()}`, undefined, false);
   return normalizeArticlePageResponse(response);
 }
 
@@ -310,7 +316,7 @@ export async function deleteArticle(id: string): Promise<void> {
 }
 
 export async function fetchAuthors(): Promise<Author[]> {
-  const authors = await handleFetch('/authors');
+  const authors = await handleFetch('/authors', undefined, false);
   return Array.isArray(authors) ? authors.map(normalizeAuthor) : [];
 }
 
@@ -347,7 +353,7 @@ export async function deleteAuthor(id: string): Promise<void> {
 }
 
 export async function fetchCategories(): Promise<string[]> {
-  const categories = await handleFetch('/articles/categories');
+  const categories = await handleFetch('/articles/categories', undefined, false);
   return Array.isArray(categories) ? categories.map((category) => String(category)) : [];
 }
 

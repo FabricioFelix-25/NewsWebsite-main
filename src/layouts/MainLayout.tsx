@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { Suspense, useMemo } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Navbar from '../components/Navbar';
 import Footer from '../components/Footer';
@@ -12,7 +12,9 @@ const MainLayout: React.FC = () => {
     <div className={`min-h-screen flex flex-col section-${currentSection}`}>
       <Navbar />
       <main className="flex-grow container mx-auto px-4 py-8">
-        <Outlet />
+        <Suspense fallback={<div className="min-h-[70vh] rounded-2xl bg-white p-8" role="status">Carregando página…</div>}>
+          <Outlet />
+        </Suspense>
       </main>
       <Footer />
     </div>

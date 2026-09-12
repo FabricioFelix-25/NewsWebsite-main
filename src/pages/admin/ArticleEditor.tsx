@@ -4,42 +4,41 @@ import { useNews } from '../../contexts/NewsContext';
 import ArticleForm from '../../components/admin/ArticleForm';
 import { Article } from '../../types';
 import { X } from 'lucide-react';
+import { fetchArticlePreview } from '../../api/editorial';
+import ArticleContent from '../../components/ArticleContent';
 
 const ArticleEditor: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { getArticleById, createArticle, updateArticle } = useNews();
+  const { createArticle, updateArticle } = useNews();
   const [article, setArticle] = useState<Article | undefined>(undefined);
   const [isLoading, setIsLoading] = useState(!!id);
   const [previewData, setPreviewData] = useState<Partial<Article> | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const fetchArticle = async () => {
-      if (id) {
-        setIsLoading(true);
-        try {
-          const fetchedArticle = await getArticleById(id);
-          setArticle(fetchedArticle);
-        } catch (error) {
-          console.error('Erro ao buscar artigo:', error);
-          navigate('/admin');
-        } finally {
-          setIsLoading(false);
-        }
-      }
-    };
-
-    fetchArticle();
-  }, [id]);
+    const controller = new AbortController();
+    setArticle(undefined);
+    setPreviewData(null);
+    setIsLoading(Boolean(id));
+    if (id) {
+      fetchArticlePreview(id, controller.signal).then(data => {
+        if (!controller.signal.aborted) setArticle(data);
+      }).catch(() => {
+        if (!controller.signal.aborted) navigate('/admin');
+      }).finally(() => {
+        if (!controller.signal.aborted) setIsLoading(false);
+      });
+    }
+    return () => controller.abort();
+  }, [id, navigate]);
 
   const handleSave = async (articleData: Partial<Article>, isDraft: boolean) => {
     try {
       if (id) {
-        await updateArticle(id, {...articleData, isDraft});
+        return await updateArticle(id, {...articleData, isDraft});
       } else {
-        await createArticle({...articleData, isDraft});
+        return await createArticle({...articleData, isDraft});
       }
-      return true;
     } catch (error) {
       console.error('Erro ao salvar artigo:', error);
       throw error;
@@ -54,7 +53,7 @@ const ArticleEditor: React.FC = () => {
     setPreviewData(null);
   };
 
-  if (isLoading) {
+  if (isLoading || (id && article?.id !== id)) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-neutral-800"></div>
@@ -68,7 +67,7 @@ const ArticleEditor: React.FC = () => {
         {id ? 'Editar artigo' : 'Criar novo artigo'}
       </h1>
       
-      <ArticleForm 
+      <ArticleForm key={id || 'new'}
         article={article} 
         onSave={handleSave} 
         onPreview={handlePreview}
@@ -97,25 +96,8 @@ const ArticleEditor: React.FC = () => {
                   Esta e a visualizacao de como o artigo aparecera para o leitor.
                 </p>
               </div>
-              <article>
-                <h1 className="text-3xl font-bold mb-4">{previewData.title}</h1>
-                {previewData.subtitle && (
-                  <p className="text-xl text-neutral-600 mb-6">{previewData.subtitle}</p>
-                )}
-                {previewData.imageUrl && (
-                  <div className="aspect-[16/9] overflow-hidden rounded-lg mb-6">
-                    <img 
-                      src={previewData.imageUrl} 
-                      alt={previewData.title} 
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                )}
-                <div 
-                  className="prose prose-lg max-w-none"
-                  dangerouslySetInnerHTML={{ __html: previewData.content || '' }}
-                />
-              </article>
+              <ArticleContent article={previewData} preview />
+
             </div>
           </div>
         </div>

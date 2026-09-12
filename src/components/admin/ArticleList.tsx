@@ -237,7 +237,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish
 
                   <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                     <div className="flex items-center justify-end space-x-2">
-                      <Link to={`/article/${article.slug}`} className="text-neutral-400 hover:text-neutral-900" target="_blank" title="Ver">
+                      <Link to={article.isDraft ? `/admin/articles/${article.id}/preview` : `/article/${article.slug}`} className="text-neutral-400 hover:text-neutral-900" target="_blank" rel="noopener noreferrer" title={article.isDraft ? 'Revisar rascunho' : 'Ver matéria'}>
                         <Eye className="h-5 w-5" />
                       </Link>
 
@@ -249,7 +249,7 @@ const ArticleList: React.FC<ArticleListProps> = ({ articles, onDelete, onPublish
                         <button
                           onClick={() => onPublish(article.id)}
                           className="text-emerald-600 hover:text-emerald-800"
-                          title="Publicar rascunho"
+                          title="Revisar e publicar rascunho"
                         >
                           <Send className="h-5 w-5" />
                         </button>

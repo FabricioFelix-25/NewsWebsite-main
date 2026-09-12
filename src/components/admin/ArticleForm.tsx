@@ -4,10 +4,11 @@ import { CheckCircle2, Eye, Save, Upload, X, Sparkles } from 'lucide-react';
 import { Article, Author } from '../../types';
 import RichTextEditor from './RichTextEditor';
 import { fetchAuthors, uploadImage } from '../../api';
+import { sanitizeArticleHtml } from '../../utils/articleHtml';
 
 interface ArticleFormProps {
   article?: Article;
-  onSave: (articleData: Partial<Article>, isDraft: boolean) => Promise<void>;
+  onSave: (articleData: Partial<Article>, isDraft: boolean) => Promise<Article>;
   onPreview: (articleData: Partial<Article>) => void;
 }
 
@@ -102,28 +103,26 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
 
   useEffect(() => {
     if (article) {
-      setFormData({
-        ...article,
-        authorId: article.authorId || article.author?.id || authors[0]?.id,
-      });
+      setFormData({ ...initialState, ...article, authorId: article.authorId || article.author?.id || '' });
       setImagePreview(article.imageUrl || null);
       return;
     }
-
     const draftRaw = localStorage.getItem('alpes-news-editor-draft');
     if (draftRaw) {
       try {
         const parsed = JSON.parse(draftRaw) as Partial<Article>;
-        setFormData((prev) => ({ ...prev, ...parsed, authorId: parsed.authorId || authors[0]?.id }));
+        setFormData({ ...initialState, ...parsed });
         setImagePreview(parsed.imageUrl || null);
-      } catch {
-        setFormData((prev) => ({ ...prev, authorId: authors[0]?.id }));
-      }
-      return;
+      } catch { setFormData(initialState); }
+    } else {
+      setFormData(initialState);
+      setImagePreview(null);
     }
+  }, [article]);
 
-    setFormData((prev) => ({ ...prev, authorId: authors[0]?.id }));
-  }, [article, authors]);
+  useEffect(() => {
+    if (authors[0]) setFormData(previous => previous.authorId ? previous : { ...previous, authorId: authors[0].id });
+  }, [authors]);
 
   useEffect(() => {
     if (article) {
@@ -259,6 +258,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
     try {
       const articleData: Partial<Article> = {
         ...formData,
+        content: sanitizeArticleHtml(formData.content || ''),
         isDraft,
         excerpt: formData.excerpt || buildExcerpt(formData.title || '', formData.content || ''),
         seoTitle: formData.seoTitle || formData.title,
@@ -272,14 +272,14 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
         sensitiveContentReviewed: Boolean(formData.sensitiveContentReviewed),
       };
 
-      await onSave(articleData, isDraft);
+      const savedArticle = await onSave(articleData, isDraft);
 
       if (!article) {
         localStorage.removeItem('alpes-news-editor-draft');
       }
 
       setFormSuccess(isDraft ? 'Rascunho salvo com sucesso.' : 'Artigo publicado com sucesso.');
-      navigate('/admin');
+      navigate(isDraft ? `/admin/articles/${savedArticle.id}/preview` : `/article/${savedArticle.slug}`);
     } catch (error) {
       console.error('Erro ao salvar artigo:', error);
       setFormError(error instanceof Error ? error.message : 'Falha ao salvar artigo.');
@@ -299,9 +299,9 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
   ] as const;
 
   return (
-    <form className="space-y-6">
+    <form className="space-y-6 min-w-0">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 space-y-6">
+        <div className="lg:col-span-2 space-y-6 min-w-0">
           <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
@@ -361,7 +361,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
           </div>
 
           <div>
-            <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center justify-between flex-wrap gap-2 mb-1">
               <label className="block text-sm font-medium">Conteudo *</label>
               <span className="text-xs text-neutral-500">{wordCount} palavras | ~{readingMinutes} min de leitura</span>
             </div>
@@ -433,7 +433,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
           </div>
         </div>
 
-        <div className="space-y-6">
+        <div className="space-y-6 min-w-0">
           <div>
             <label htmlFor="authorId" className="block text-sm font-medium mb-1">Autor *</label>
             <select
@@ -470,12 +470,12 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
 
           <div>
             <label className="block text-sm font-medium mb-1">Tags</label>
-            <div className="flex">
+            <div className="flex gap-2 min-w-0">
               <input
                 type="text"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
-                className="input-field flex-grow"
+                className="input-field flex-1 min-w-0"
                 placeholder="Adicionar tag"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
@@ -484,16 +484,16 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
                   }
                 }}
               />
-              <button type="button" onClick={handleAddTag} className="ml-2 px-4 py-2 bg-neutral-200 hover:bg-neutral-300 rounded-md transition-colors duration-200">
+              <button type="button" onClick={handleAddTag} className="shrink-0 px-3 py-2 bg-neutral-200 hover:bg-neutral-300 rounded-md transition-colors duration-200">
                 Adicionar
               </button>
             </div>
             {formData.tags && formData.tags.length > 0 && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {formData.tags.map((tag) => (
-                  <div key={tag} className="flex items-center bg-neutral-100 px-3 py-1 rounded-full">
-                    <span className="text-sm">{tag}</span>
-                    <button type="button" onClick={() => handleRemoveTag(tag)} className="ml-1 p-1 rounded-full hover:bg-neutral-200">
+                  <div key={tag} className="flex items-center bg-neutral-100 px-3 py-1 rounded-full max-w-full min-w-0">
+                    <span className="text-sm break-all">{tag}</span>
+                    <button type="button" onClick={() => handleRemoveTag(tag)} className="ml-1 p-1 rounded-full hover:bg-neutral-200 shrink-0">
                       <X className="h-3 w-3" />
                     </button>
                   </div>
@@ -503,7 +503,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
           </div>
 
           <div>
-            <label className="block text-sm font-medium mb-1">Imagem de capa *</label>
+            <label className="block text-sm font-medium mb-1">Imagem de capa</label>
             <div className="border border-neutral-300 rounded-md p-4">
               {imagePreview ? (
                 <div className="mb-4">
@@ -606,15 +606,15 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
         <div className="p-3 rounded-md border border-green-200 bg-green-50 text-green-700 text-sm">{formSuccess}</div>
       )}
 
-      <div className="flex items-center justify-end space-x-3 pt-6 border-t border-neutral-200">
-        <button type="button" onClick={handlePreview} className="btn btn-outline flex items-center">
+      <div className="flex flex-wrap items-center justify-end gap-3 pt-6 border-t border-neutral-200">
+        <button type="button" onClick={handlePreview} className="btn btn-outline flex flex-1 sm:flex-none items-center justify-center min-w-[140px]">
           <Eye className="h-4 w-4 mr-2" />
           Pre-visualizar
         </button>
         <button
           type="button"
           onClick={(e) => handleSubmit(e, true)}
-          className="btn btn-outline flex items-center"
+          className="btn btn-outline flex flex-1 sm:flex-none items-center justify-center min-w-[140px]"
           disabled={isSaving}
         >
           <Save className="h-4 w-4 mr-2" />
@@ -623,7 +623,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
         <button
           type="button"
           onClick={(e) => handleSubmit(e, false)}
-          className="btn btn-primary flex items-center"
+          className="btn btn-primary flex flex-1 sm:flex-none items-center justify-center min-w-[140px]"
           disabled={isSaving}
         >
           Publicar

@@ -9,6 +9,7 @@ interface ArticleGridProps {
   viewAll?: string;
   columns?: 1 | 2 | 3 | 4;
   compact?: boolean;
+  priorityImages?: number;
 }
 
 const ArticleGrid: React.FC<ArticleGridProps> = ({ 
@@ -16,7 +17,8 @@ const ArticleGrid: React.FC<ArticleGridProps> = ({
   title, 
   viewAll, 
   columns = 3,
-  compact = false 
+  compact = false,
+  priorityImages = 0
 }) => {
   if (!articles.length) return null;
 
@@ -31,7 +33,7 @@ const ArticleGrid: React.FC<ArticleGridProps> = ({
     <div className="mb-12">
       {title && (
         <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900">{title}</h2>
+          <h2 className="text-xl sm:text-2xl font-bold tracking-tight text-neutral-900 mb-0">{title}</h2>
           {viewAll && (
             <Link 
               to={viewAll} 
@@ -44,8 +46,8 @@ const ArticleGrid: React.FC<ArticleGridProps> = ({
         </div>
       )}
       <div className={`grid ${getGridColsClass()} ${compact ? 'gap-3' : 'gap-6'}`}>
-        {articles.map((article) => (
-          <ArticleCard key={article.id} article={article} compact={compact} />
+        {articles.map((article, index) => (
+          <ArticleCard key={article.id} article={article} compact={compact} priorityImage={index < priorityImages} />
         ))}
       </div>
     </div>
@@ -53,4 +55,3 @@ const ArticleGrid: React.FC<ArticleGridProps> = ({
 };
 
 export default ArticleGrid;
-

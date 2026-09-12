@@ -9,14 +9,18 @@ import { Search as SearchIcon } from 'lucide-react';
 
 const SearchPage: React.FC = () => {
   const location = useLocation();
-  const { searchArticles, getCategories, getAuthors } = useNews();
+  const { searchArticles } = useNews();
+  const [allArticles, setAllArticles] = useState<Article[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
   const [authors, setAuthors] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loadError, setLoadError] = useState(false);
+  const [retry, setRetry] = useState(0);
   
   useEffect(() => {
+    let active = true;
     const params = new URLSearchParams(location.search);
     const query = params.get('q') || '';
     const tag = params.get('tag') || '';
@@ -25,8 +29,9 @@ const SearchPage: React.FC = () => {
     
     const fetchArticles = async () => {
       setIsLoading(true);
+      setLoadError(false);
       try {
-        let searchResults;
+        let searchResults: Article[];
         if (query) {
           searchResults = await searchArticles(query);
         } else if (tag) {
@@ -35,26 +40,28 @@ const SearchPage: React.FC = () => {
           searchResults = [];
         }
         
-        const categoriesList = await getCategories();
-        const authorsList = await getAuthors();
+        if (!active) return;
+        const categoriesList = [...new Set(searchResults.map(article => article.category))];
+        const authorsList = [...new Set(searchResults.map(article => article.author?.name).filter((name): name is string => Boolean(name)))];
         
+        setAllArticles(searchResults);
         setArticles(searchResults);
         setCategories(categoriesList);
         setAuthors(authorsList);
       } catch (error) {
         console.error('Erro ao buscar artigos:', error);
+        if (active) { setArticles([]); setAllArticles([]); setLoadError(true); }
       } finally {
-        setIsLoading(false);
+        if (active) setIsLoading(false);
       }
     };
 
     fetchArticles();
-  }, [location.search]);
+    return () => { active = false; };
+  }, [location.search, searchArticles, retry]);
 
-  const handleFilter = async (filters: { category?: string; author?: string; date?: string }) => {
-    setIsLoading(true);
-    try {
-      let filteredArticles = await searchArticles(searchQuery);
+  const handleFilter = (filters: { category?: string; author?: string; date?: string }) => {
+      let filteredArticles = [...allArticles];
       
       if (filters.category) {
         filteredArticles = filteredArticles.filter(article => 
@@ -70,7 +77,7 @@ const SearchPage: React.FC = () => {
       
       if (filters.date) {
         const now = new Date();
-        let fromDate = new Date();
+        const fromDate = new Date();
         
         if (filters.date === 'today') {
           fromDate.setHours(0, 0, 0, 0);
@@ -88,15 +95,10 @@ const SearchPage: React.FC = () => {
       }
       
       setArticles(filteredArticles);
-    } catch (error) {
-      console.error('Erro ao filtrar artigos:', error);
-    } finally {
-      setIsLoading(false);
-    }
   };
 
   return (
-    <div>
+    <div aria-busy={isLoading}>
       <header className="mb-8">
         <h1 className="text-3xl md:text-4xl font-bold flex items-center text-neutral-900">
           <SearchIcon className="h-8 w-8 mr-3 text-neutral-700" />
@@ -110,15 +112,21 @@ const SearchPage: React.FC = () => {
       </header>
 
       <ArticleFilter 
+        key={location.search}
         categories={categories} 
         authors={authors} 
         onFilter={handleFilter} 
       />
       
       {isLoading ? (
-        <ArticleGridSkeleton count={6} columns={3} />
+        <ArticleGridSkeleton count={6} columns={3} showTitle={false} />
+      ) : loadError ? (
+        <div role="alert" className="py-12 text-center bg-white rounded-2xl border border-neutral-200/80 my-6">
+          <p>Não foi possível carregar os resultados da busca.</p>
+          <button type="button" className="btn btn-outline" onClick={() => setRetry(value => value + 1)}>Tentar novamente</button>
+        </div>
       ) : articles.length > 0 ? (
-        <ArticleGrid articles={articles} />
+        <ArticleGrid articles={articles} priorityImages={3} />
       ) : (
         <div className="py-12 text-center bg-white rounded-2xl border border-neutral-200/80 my-6">
           <p className="text-xl font-medium mb-2 text-neutral-900">Nenhum resultado encontrado</p>

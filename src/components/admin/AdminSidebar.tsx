@@ -1,17 +1,24 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
-import { Home, FileText, Users, LogOut } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { NavLink, useLocation } from 'react-router-dom';
+import { Home, FileText, Users, LogOut, Menu, X } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const AdminSidebar: React.FC = () => {
   const { logout } = useAuth();
+  const [isOpen, setIsOpen] = useState(false);
+  const { pathname } = useLocation();
+  useEffect(() => { setIsOpen(false); }, [pathname]);
 
   return (
-    <aside className="bg-neutral-900 text-white w-64 min-h-screen flex flex-col">
-      <div className="p-4 border-b border-neutral-800">
-        <h1 className="text-xl font-bold">AlpesNews Admin</h1>
+    <aside className="bg-neutral-900 text-white w-full md:w-64 md:min-h-screen flex flex-col shrink-0">
+      <div className="p-4 border-b border-neutral-800 flex items-center justify-between gap-3">
+        <p className="text-lg md:text-xl font-bold mb-0">AlpesNews Admin</p>
+        <button type="button" onClick={() => setIsOpen(value => !value)} aria-expanded={isOpen} aria-controls="admin-navigation" aria-label={isOpen ? 'Fechar menu do painel' : 'Abrir menu do painel'} className="md:hidden p-2 rounded-md hover:bg-neutral-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white">
+          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </button>
       </div>
-      <nav className="flex-1 py-4">
+      <div id="admin-navigation" className={`${isOpen ? 'flex' : 'hidden'} md:flex flex-1 flex-col`}>
+      <nav aria-label="Navegação do painel" className="flex-1 py-4">
         <ul className="space-y-1">
           <li>
             <NavLink
@@ -63,6 +70,7 @@ const AdminSidebar: React.FC = () => {
           <LogOut className="h-5 w-5 mr-3" />
           Sair
         </button>
+      </div>
       </div>
     </aside>
   );

@@ -1,8 +1,9 @@
-import React, { createContext, useContext, ReactNode, useRef } from 'react';
+import React, { createContext, useContext, ReactNode, useMemo } from 'react';
 import { Article } from '../types';
 import * as api from '../api';
 
 interface NewsContextType {
+  getCachedHomeData: () => { featured: Article[]; latest: Article[] } | null;
   getFeaturedArticles: (forceRefresh?: boolean) => Promise<Article[]>;
   getLatestArticles: (limit?: number, forceRefresh?: boolean) => Promise<Article[]>;
   getArticlesByCategory: (category: string, limit?: number) => Promise<Article[]>;
@@ -46,50 +47,54 @@ const byNewestDate = (a: Article, b: Article) => {
   return dateB - dateA;
 };
 
-const CACHE_TTL_MS = 60 * 1000; // 1 minuto de cache em memória
+const CACHE_TTL_MS = 60 * 1000;
+const MAX_CACHE_ENTRIES = 100;
 
-export const NewsProvider: React.FC<NewsProviderProps> = ({ children }) => {
-  const articlesCacheRef = useRef<{ data: Article[]; timestamp: number } | null>(null);
-  const featuredCacheRef = useRef<{ data: Article[]; timestamp: number } | null>(null);
-  const articleSlugCacheRef = useRef<Map<string, { data: Article; timestamp: number }>>(new Map());
+// A mesma promessa atende componentes concorrentes e o segundo effect do StrictMode.
+// Os detalhes têm chaves próprias: resumos das listas nunca substituem o corpo da matéria.
+function createNewsService(): NewsContextType {
+  const cache = new Map<string, { data: unknown; timestamp: number }>();
+  const pending = new Map<string, Promise<unknown>>();
+  let generation = 0;
+
+  const peek = <T,>(key: string): T | null => {
+    const entry = cache.get(key);
+    return entry && Date.now() - entry.timestamp < CACHE_TTL_MS ? entry.data as T : null;
+  };
+
+  const read = <T,>(key: string, fetcher: () => Promise<T>, forceRefresh = false): Promise<T> => {
+    const cached = peek<T>(key);
+    if (!forceRefresh && cached !== null) return Promise.resolve(cached);
+    const existing = pending.get(key);
+    if (existing) return existing as Promise<T>;
+
+    const requestGeneration = generation;
+    const request = fetcher().then((data) => {
+      if (generation === requestGeneration) {
+        cache.delete(key);
+        cache.set(key, { data, timestamp: Date.now() });
+        if (cache.size > MAX_CACHE_ENTRIES) cache.delete(cache.keys().next().value!);
+      }
+      return data;
+    }).finally(() => {
+      if (pending.get(key) === request) pending.delete(key);
+    });
+    pending.set(key, request);
+    return request;
+  };
 
   const clearCache = () => {
-    articlesCacheRef.current = null;
-    featuredCacheRef.current = null;
-    articleSlugCacheRef.current.clear();
+    generation += 1;
+    cache.clear();
+    pending.clear();
   };
 
   const getFeaturedArticles = async (forceRefresh = false): Promise<Article[]> => {
-    const now = Date.now();
-    if (!forceRefresh && featuredCacheRef.current && now - featuredCacheRef.current.timestamp < CACHE_TTL_MS) {
-      return featuredCacheRef.current.data;
-    }
-
-    try {
-      const articles = await api.fetchFeaturedArticles();
-      featuredCacheRef.current = { data: articles, timestamp: now };
-      return articles;
-    } catch (err) {
-      if (featuredCacheRef.current) return featuredCacheRef.current.data;
-      throw err;
-    }
+    return read('featured', async () => (await api.fetchFeaturedArticles()).filter(article => !article.isDraft), forceRefresh);
   };
 
   const getAllPublished = async (forceRefresh = false): Promise<Article[]> => {
-    const now = Date.now();
-    if (!forceRefresh && articlesCacheRef.current && now - articlesCacheRef.current.timestamp < CACHE_TTL_MS) {
-      return articlesCacheRef.current.data;
-    }
-
-    try {
-      const articles = await api.fetchArticles();
-      const published = articles.filter((article) => !article.isDraft).sort(byNewestDate);
-      articlesCacheRef.current = { data: published, timestamp: now };
-      return published;
-    } catch (err) {
-      if (articlesCacheRef.current) return articlesCacheRef.current.data;
-      throw err;
-    }
+    return read('published', async () => (await api.fetchArticles()).filter(article => !article.isDraft).sort(byNewestDate), forceRefresh);
   };
 
   const getLatestArticles = async (limit = 10, forceRefresh = false): Promise<Article[]> => {
@@ -98,17 +103,9 @@ export const NewsProvider: React.FC<NewsProviderProps> = ({ children }) => {
   };
 
   const getArticlesByCategory = async (category: string, limit = 100): Promise<Article[]> => {
-    // Se temos os artigos em cache, filtramos em memória instantaneamente (0ms)
-    if (articlesCacheRef.current && Date.now() - articlesCacheRef.current.timestamp < CACHE_TTL_MS) {
-      return articlesCacheRef.current.data
-        .filter((article) => article.category === category)
-        .slice(0, limit);
-    }
-
-    const articles = await api.fetchArticlesByCategory(category);
-    return articles
-      .filter((article) => !article.isDraft)
-      .slice(0, limit);
+    const articles = await read(`category:${category}`, async () =>
+      (await api.fetchArticlesByCategory(category)).filter(article => !article.isDraft).sort(byNewestDate));
+    return articles.slice(0, limit);
   };
 
   const getArticleById = async (id: string): Promise<Article> => {
@@ -116,38 +113,17 @@ export const NewsProvider: React.FC<NewsProviderProps> = ({ children }) => {
   };
 
   const getArticleBySlug = async (slug: string): Promise<Article> => {
-    const now = Date.now();
-    const cached = articleSlugCacheRef.current.get(slug);
-    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
-      return cached.data;
-    }
-
-    const article = await api.fetchArticleBySlug(slug);
-    articleSlugCacheRef.current.set(slug, { data: article, timestamp: now });
-    return article;
+    return read(`detail:${slug}`, () => api.fetchArticleBySlug(slug));
   };
 
-  const getAllArticles = async (forceRefresh = false): Promise<Article[]> => {
-    try {
-      const articles = await api.fetchAdminArticles();
-      return articles.sort(byNewestDate);
-    } catch {
-      return getAllPublished(forceRefresh);
-    }
+  const getAllArticles = async (): Promise<Article[]> => {
+    // Dados administrativos nunca entram no cache público nem silenciam falhas de autorização.
+    return (await api.fetchAdminArticles()).sort(byNewestDate);
   };
 
   const getRelatedArticles = async (articleId: string, category: string, limit = 3): Promise<Article[]> => {
-    // Tenta primeiro em memória
-    if (articlesCacheRef.current) {
-      return articlesCacheRef.current.data
-        .filter((article) => article.category === category && article.id !== articleId)
-        .slice(0, limit);
-    }
-
-    const articles = await api.fetchArticlesByCategory(category);
-    return articles
-      .filter((article) => article.id !== articleId && !article.isDraft)
-      .slice(0, limit);
+    const articles = await getArticlesByCategory(category);
+    return articles.filter(article => article.id !== articleId).slice(0, limit);
   };
 
   const createArticle = async (article: Partial<Article>): Promise<Article> => {
@@ -168,16 +144,16 @@ export const NewsProvider: React.FC<NewsProviderProps> = ({ children }) => {
   };
 
   const searchArticles = async (query: string, tag?: string): Promise<Article[]> => {
-    return api.searchArticles(query, tag);
+    return read(`search:${JSON.stringify([query, tag || ''])}`, async () =>
+      (await api.searchArticles(query, tag)).filter(article => !article.isDraft));
   };
 
   const getCategories = async (): Promise<string[]> => {
-    return api.fetchCategories();
+    return read('categories', api.fetchCategories);
   };
 
   const getAuthors = async (): Promise<string[]> => {
-    const authors = await api.fetchAuthors();
-    return authors.map((author) => author.name);
+    return read('authors', async () => (await api.fetchAuthors()).map(author => author.name));
   };
 
   const getStats = async () => {
@@ -195,27 +171,31 @@ export const NewsProvider: React.FC<NewsProviderProps> = ({ children }) => {
     }
   };
 
-  return (
-    <NewsContext.Provider
-      value={{
-        getFeaturedArticles,
-        getLatestArticles,
-        getArticlesByCategory,
-        getArticleById,
-        getArticleBySlug,
-        getAllArticles,
-        getRelatedArticles,
-        createArticle,
-        updateArticle,
-        deleteArticle,
-        searchArticles,
-        getCategories,
-        getAuthors,
-        clearCache,
-        getStats,
-      }}
-    >
-      {children}
-    </NewsContext.Provider>
-  );
+  return {
+    getCachedHomeData: () => {
+      const latest = peek<Article[]>('published');
+      const featured = peek<Article[]>('featured');
+      return latest ? { latest, featured: featured || latest.slice(0, 3) } : null;
+    },
+    getFeaturedArticles,
+    getLatestArticles,
+    getArticlesByCategory,
+    getArticleById,
+    getArticleBySlug,
+    getAllArticles,
+    getRelatedArticles,
+    createArticle,
+    updateArticle,
+    deleteArticle,
+    searchArticles,
+    getCategories,
+    getAuthors,
+    clearCache,
+    getStats,
+  };
+}
+
+export const NewsProvider: React.FC<NewsProviderProps> = ({ children }) => {
+  const service = useMemo(createNewsService, []);
+  return <NewsContext.Provider value={service}>{children}</NewsContext.Provider>;
 };

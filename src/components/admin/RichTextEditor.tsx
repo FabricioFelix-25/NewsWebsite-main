@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Bold, Italic, Underline, Link as LinkIcon, Image as ImageIcon, List, ListOrdered, 
   AlignLeft, AlignCenter, AlignRight, Heading1, Heading2, 
-  Quote, Video, Code2, Upload, Globe, X, Check, Loader2,
+  Quote, Video, Code2, Upload,
   Trash2, Edit3
 } from 'lucide-react';
 import { uploadImage } from '../../api';
+import { sanitizeArticleHtml } from '../../utils/articleHtml';
 
 interface RichTextEditorProps {
   initialValue: string;
@@ -51,7 +52,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
   useEffect(() => {
     if (editorRef.current && !isHtmlMode) {
       if (editorRef.current.innerHTML !== initialValue) {
-        editorRef.current.innerHTML = initialValue;
+        editorRef.current.innerHTML = sanitizeArticleHtml(initialValue);
       }
     }
     setHtmlContent(initialValue);
@@ -72,16 +73,16 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
     }
   }, []);
 
-  const handleInput = () => {
+  const handleInput = useCallback(() => {
     if (editorRef.current) {
       const newHtml = editorRef.current.innerHTML;
       setHtmlContent(newHtml);
       onChange(newHtml);
       saveSelection();
     }
-  };
+  }, [onChange, saveSelection]);
 
-  const execCommand = (command: string, value: string | null = null) => {
+  const execCommand = (command: string, value?: string) => {
     if (isHtmlMode) return;
     document.execCommand(command, false, value);
     if (editorRef.current) {
@@ -126,7 +127,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
       left: imgRect.left - containerRect.left,
       width: imgRect.width,
     });
-  }, []);
+  }, [handleInput]);
 
   const handleEditorClick = (e: React.MouseEvent<HTMLDivElement>) => {
     const target = e.target as HTMLElement;
@@ -202,7 +203,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
         const range = sel.getRangeAt(0);
         range.deleteContents();
         const tempEl = document.createElement('div');
-        tempEl.innerHTML = htmlToInsert;
+        tempEl.innerHTML = sanitizeArticleHtml(htmlToInsert);
         const frag = document.createDocumentFragment();
         let node: Node | null;
         let lastNode: Node | null = null;
@@ -217,7 +218,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
           savedRangeRef.current = newRange;
         }
       } else {
-        editorRef.current.innerHTML += htmlToInsert;
+        editorRef.current.innerHTML += sanitizeArticleHtml(htmlToInsert);
       }
       handleInput();
     }
@@ -245,9 +246,11 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
       setUploadError('Informe uma imagem válida ou envie um arquivo.');
       return;
     }
+    if (isUploading) return;
+    const escapeText = (value: string) => value.replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]!);
     const altText = imageAlt.trim() || 'Imagem da matéria';
     const captionHtml = imageCaption.trim()
-      ? `<figcaption class="text-center text-xs text-neutral-500 mt-2 italic">${imageCaption.trim()}</figcaption>`
+      ? `<figcaption class="text-center text-xs text-neutral-500 mt-2 italic">${escapeText(imageCaption.trim())}</figcaption>`
       : '';
 
     if (isEditingExistingImage && selectedImage) {
@@ -283,7 +286,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
       imgClass = 'w-full rounded-xl shadow-md object-cover max-h-[300px]';
     }
 
-    const figureHtml = `<figure class="${figureClass}"><img src="${imageUrl.trim()}" alt="${altText}" class="${imgClass}" />${captionHtml}</figure><p><br></p>`;
+    const figureHtml = `<figure class="${figureClass}"><img src="${escapeText(imageUrl.trim())}" alt="${escapeText(altText)}" class="${imgClass}" />${captionHtml}</figure><p><br></p>`;
     insertHtmlAtCursor(figureHtml);
     setIsImageModalOpen(false);
   };
@@ -317,7 +320,7 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
 
   const toggleHtmlMode = () => {
     if (isHtmlMode) {
-      if (editorRef.current) editorRef.current.innerHTML = htmlContent;
+      if (editorRef.current) editorRef.current.innerHTML = sanitizeArticleHtml(htmlContent);
       onChange(htmlContent);
       setIsHtmlMode(false);
     } else {
@@ -355,20 +358,29 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
         <div className="image-action-toolbar bg-neutral-900 text-white px-3 py-2 border-b border-neutral-700 flex flex-wrap items-center gap-2 text-xs z-10">
           <span className="text-blue-400">Imagem:</span>
           <div className="flex gap-1 bg-neutral-800 p-0.5 rounded-lg border border-neutral-700">
-            <button onClick={() => applyAlignmentToSelected('left')} className={`px-2 py-1 rounded ${selectedImage.align === 'left' ? 'bg-blue-600' : ''}`}>Esquerda</button>
-            <button onClick={() => applyAlignmentToSelected('center')} className={`px-2 py-1 rounded ${selectedImage.align === 'center' ? 'bg-blue-600' : ''}`}>Centro</button>
-            <button onClick={() => applyAlignmentToSelected('full')} className={`px-2 py-1 rounded ${selectedImage.align === 'full' ? 'bg-blue-600' : ''}`}>Total</button>
-            <button onClick={() => applyAlignmentToSelected('right')} className={`px-2 py-1 rounded ${selectedImage.align === 'right' ? 'bg-blue-600' : ''}`}>Direita</button>
+            <button type="button" onClick={() => applyAlignmentToSelected('left')} className={`px-2 py-1 rounded ${selectedImage.align === 'left' ? 'bg-blue-600' : ''}`}>Esquerda</button>
+            <button type="button" onClick={() => applyAlignmentToSelected('center')} className={`px-2 py-1 rounded ${selectedImage.align === 'center' ? 'bg-blue-600' : ''}`}>Centro</button>
+            <button type="button" onClick={() => applyAlignmentToSelected('full')} className={`px-2 py-1 rounded ${selectedImage.align === 'full' ? 'bg-blue-600' : ''}`}>Total</button>
+            <button type="button" onClick={() => applyAlignmentToSelected('right')} className={`px-2 py-1 rounded ${selectedImage.align === 'right' ? 'bg-blue-600' : ''}`}>Direita</button>
           </div>
-          <button onClick={handleEditSelectedImage} className="px-2.5 py-1 bg-neutral-800 text-yellow-400 border border-neutral-700 rounded"><Edit3 className="h-3 w-3 inline" /></button>
-          <button onClick={handleDeleteSelectedImage} className="px-2.5 py-1 bg-red-900 text-red-300 border border-red-800 rounded"><Trash2 className="h-3 w-3 inline" /></button>
+          <button type="button" onClick={handleEditSelectedImage} className="px-2.5 py-1 bg-neutral-800 text-yellow-400 border border-neutral-700 rounded"><Edit3 className="h-3 w-3 inline" /></button>
+          <button type="button" onClick={handleDeleteSelectedImage} className="px-2.5 py-1 bg-red-900 text-red-300 border border-red-800 rounded"><Trash2 className="h-3 w-3 inline" /></button>
         </div>
       )}
 
       {isHtmlMode ? (
         <textarea value={htmlContent} onChange={(e) => { setHtmlContent(e.target.value); onChange(e.target.value); }} className="w-full p-4 font-mono text-sm min-h-[450px] bg-neutral-900 text-neutral-100 rounded-b-xl" />
       ) : (
-        <div ref={editorRef} onClick={handleEditorClick} className="p-6 min-h-[450px] focus:outline-none prose max-w-none bg-white rounded-b-xl" contentEditable onInput={handleInput} onKeyUp={saveSelection} onMouseUp={saveSelection} style={{ unicodeBidi: 'plaintext', direction: 'ltr', textAlign: 'left' }} />
+        <div ref={editorRef} onClick={handleEditorClick} className="p-6 min-h-[450px] focus:outline-none prose max-w-none bg-white rounded-b-xl" contentEditable onPaste={(event) => {
+          event.preventDefault();
+          const html = event.clipboardData.getData('text/html');
+          if (html) insertHtmlAtCursor(sanitizeArticleHtml(html));
+          else {
+            const plain = document.createElement('div');
+            plain.textContent = event.clipboardData.getData('text/plain');
+            insertHtmlAtCursor(plain.innerHTML.replace(/\n/g, '<br>'));
+          }
+        }} onInput={handleInput} onKeyUp={saveSelection} onMouseUp={saveSelection} style={{ unicodeBidi: 'plaintext', direction: 'ltr', textAlign: 'left' }} />
       )}
 
       {isImageModalOpen && (
@@ -376,8 +388,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
           <div className="bg-white rounded-2xl w-full max-w-lg p-6">
             <h3 className="font-bold text-lg mb-4">{isEditingExistingImage ? 'Editar Imagem' : 'Inserir Imagem'}</h3>
             <div className="flex bg-neutral-100 p-1 rounded-lg mb-4">
-              <button onClick={() => setImageTab('upload')} className={`flex-1 py-1 rounded ${imageTab === 'upload' ? 'bg-white shadow' : ''}`}>Upload</button>
-              <button onClick={() => setImageTab('url')} className={`flex-1 py-1 rounded ${imageTab === 'url' ? 'bg-white shadow' : ''}`}>URL</button>
+              <button type="button" onClick={() => setImageTab('upload')} className={`flex-1 py-1 rounded ${imageTab === 'upload' ? 'bg-white shadow' : ''}`}>Upload</button>
+              <button type="button" onClick={() => setImageTab('url')} className={`flex-1 py-1 rounded ${imageTab === 'url' ? 'bg-white shadow' : ''}`}>URL</button>
             </div>
             {imageTab === 'upload' ? (
               <label className="border-2 border-dashed border-neutral-300 rounded-xl p-6 flex flex-col items-center cursor-pointer">
@@ -388,10 +400,12 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
             ) : (
               <input type="url" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="w-full px-3 py-2 border rounded-lg" placeholder="https://..." />
             )}
+            {isUploading && <p role="status" className="text-sm mt-2">Enviando imagem…</p>}
+            {uploadError && <p role="alert" className="text-red-600 text-sm mt-2">{uploadError}</p>}
             <input type="text" value={imageCaption} onChange={(e) => setImageCaption(e.target.value)} className="w-full mt-3 px-3 py-2 border rounded-lg" placeholder="Legenda" />
             <div className="mt-4 flex gap-2">
-              <button onClick={() => setIsImageModalOpen(false)} className="px-4 py-2 text-sm text-neutral-600">Cancelar</button>
-              <button onClick={handleConfirmImage} className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg">{isEditingExistingImage ? 'Salvar' : 'Inserir'}</button>
+              <button type="button" onClick={() => setIsImageModalOpen(false)} className="px-4 py-2 text-sm text-neutral-600">Cancelar</button>
+              <button type="button" onClick={handleConfirmImage} disabled={isUploading} className="px-5 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg">{isEditingExistingImage ? 'Salvar' : 'Inserir'}</button>
             </div>
           </div>
         </div>
@@ -404,8 +418,8 @@ const RichTextEditor: React.FC<RichTextEditorProps> = ({ initialValue, onChange 
             <input type="url" value={videoUrl} onChange={(e) => setVideoUrl(e.target.value)} className="w-full px-3 py-2 border rounded-lg" placeholder="URL do YouTube" />
             {videoError && <p className="text-red-600 text-xs mt-2">{videoError}</p>}
             <div className="mt-4 flex gap-2">
-              <button onClick={() => setIsVideoModalOpen(false)} className="px-4 py-2 text-sm text-neutral-600">Cancelar</button>
-              <button onClick={handleConfirmVideo} className="px-5 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg">Inserir</button>
+              <button type="button" onClick={() => setIsVideoModalOpen(false)} className="px-4 py-2 text-sm text-neutral-600">Cancelar</button>
+              <button type="button" onClick={handleConfirmVideo} className="px-5 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg">Inserir</button>
             </div>
           </div>
         </div>
