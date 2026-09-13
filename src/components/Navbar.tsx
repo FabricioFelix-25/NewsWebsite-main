@@ -71,19 +71,7 @@ const categories: CategoryItem[] = [
 const Navbar: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [scrolled, setScrolled] = useState(false);
   const location = useLocation();
-
-  useEffect(() => {
-    const handleScroll = () => {
-      const offset = window.scrollY;
-      setScrolled(offset > 50);
-    };
-
-    handleScroll();
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
 
   useEffect(() => {
     setIsMenuOpen(false);
@@ -99,9 +87,7 @@ const Navbar: React.FC = () => {
     currentCategorySlug === category.slug ||
     category.subcategories.some((subcategory) => subcategory.slug === currentCategorySlug);
 
-  const navClass = `sticky top-0 z-50 py-4 transition-[background-color,box-shadow] duration-300 ${
-    scrolled ? 'bg-white shadow-md' : 'bg-neutral-50'
-  }`;
+  const navClass = 'sticky top-0 z-50 py-4 bg-white shadow-sm';
 
   const getCategoryStyle = (category: string, isActive: boolean, isMobile = false) => {
     const baseStyle = 'px-3 py-2 rounded-md transition-colors duration-200';

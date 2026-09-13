@@ -541,17 +541,7 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
           </div>
 
           <div>
-            <label htmlFor="featured" className="flex items-center space-x-2">
-              <input
-                type="checkbox"
-                id="featured"
-                name="featured"
-                checked={formData.featured}
-                onChange={(e) => setFormData((prev) => ({ ...prev, featured: e.target.checked }))}
-                className="rounded border-neutral-300 text-blue-600 focus:ring-blue-500"
-              />
-              <span className="text-sm font-medium">Artigo em destaque</span>
-            </label>
+            <p className="text-sm text-neutral-600">Destaques automáticos: as 3 publicações mais recentes aparecem na página inicial. Ao publicar uma nova matéria, a mais antiga sai do destaque.</p>
           </div>
 
           <div className="pt-4 border-t border-neutral-200">

@@ -4,6 +4,7 @@ import { Bot, Clock } from 'lucide-react';
 import { Article } from '../types';
 import { getCategoryLabel, getSectionFromCategory } from '../utils/categoryColors';
 import { sanitizeArticleHtml } from '../utils/articleHtml';
+import { imageForDisplay } from '../utils/imageDelivery';
 
 export default function ArticleContent({ article, preview = false }: { article: Partial<Article>; preview?: boolean }) {
   const html = useMemo(() => sanitizeArticleHtml(article.content || ''), [article.content]);
@@ -22,7 +23,7 @@ export default function ArticleContent({ article, preview = false }: { article: 
         </div>
         {article.imageUrl && failedImage !== article.imageUrl ? (
           <div className="aspect-video overflow-hidden rounded-lg bg-neutral-100">
-            <img src={article.imageUrl} onError={() => setFailedImage(article.imageUrl || '')} alt={article.title || 'Capa da matéria'} width="1600" height="900" fetchPriority="high" decoding="async" referrerPolicy={preview ? 'no-referrer' : undefined} className="w-full h-full object-cover" />
+            <img src={imageForDisplay(article.imageUrl, 1280)} onError={() => setFailedImage(article.imageUrl || '')} alt={article.title || 'Capa da matéria'} width="1600" height="900" fetchPriority="high" decoding="async" referrerPolicy={preview ? 'no-referrer' : undefined} className="w-full h-full object-cover" />
           </div>
         ) : (preview || article.imageUrl) && <div className="aspect-video rounded-lg bg-neutral-100 flex items-center justify-center p-6 text-center text-neutral-600">{preview ? 'Capa pendente ou indisponível. Você pode adicionar uma imagem pertinente no editor.' : 'Imagem indisponível'}</div>}
       </header>

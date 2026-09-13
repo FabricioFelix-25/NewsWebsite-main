@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Clock } from 'lucide-react';
 import { Article } from '../types';
+import { imageForDisplay } from '../utils/imageDelivery';
 import { getCategoryLabel, getTopicColorTokens } from '../utils/categoryColors';
 
 interface ArticleCardProps {
@@ -12,7 +13,6 @@ interface ArticleCardProps {
 
 const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false, priorityImage = false }) => {
   const [failedImage, setFailedImage] = useState('');
-  const [loadedImage, setLoadedImage] = useState('');
   const colorTokens = getTopicColorTokens(article.category);
   const cardStyle = {
     '--section-primary': `var(${colorTokens.primary})`,
@@ -23,15 +23,14 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false, pri
   const hasImage = Boolean(article.imageUrl && failedImage !== article.imageUrl);
   const image = hasImage ? (
     <img
-      src={article.imageUrl}
+      src={imageForDisplay(article.imageUrl, compact ? 240 : 640)}
       alt={article.title}
       width={800}
       height={450}
       loading={priorityImage ? 'eager' : 'lazy'}
       decoding="async"
       onError={() => setFailedImage(article.imageUrl)}
-      onLoad={() => setLoadedImage(article.imageUrl)}
-      className={`w-full h-full object-cover transition-[transform,opacity] duration-300 group-hover:scale-105 ${loadedImage === article.imageUrl ? 'opacity-100' : 'opacity-0'}`}
+      className="w-full h-full object-cover"
     />
   ) : (
     <span className="flex h-full w-full items-center justify-center bg-neutral-100 text-neutral-500 text-xs font-semibold" aria-label="Matéria sem imagem">AlpesNews</span>
@@ -39,7 +38,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false, pri
 
   if (compact) {
     return (
-      <article className="article-card topic-colored group p-3 flex flex-row gap-3 items-center rounded-xl bg-white transition-all duration-200 hover:shadow-md" style={cardStyle}>
+      <article className="article-card topic-colored group p-3 flex flex-row gap-3 items-center rounded-xl bg-white transition-colors duration-150 hover:shadow-md" style={cardStyle}>
         <Link to={`/article/${article.slug}`} className="block flex-shrink-0 w-24 h-20 sm:w-28 sm:h-24 overflow-hidden rounded-lg bg-neutral-100">
           {image}
         </Link>
@@ -69,8 +68,8 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false, pri
   }
 
   return (
-    <article className="article-card topic-colored group flex flex-col h-full rounded-xl bg-white overflow-hidden transition-all duration-300" style={cardStyle}>
-      <Link to={`/article/${article.slug}`} className="block overflow-hidden relative bg-neutral-100 aspect-video">
+    <article className="article-card topic-colored group flex flex-col h-full rounded-xl bg-white overflow-hidden transition-colors duration-150" style={cardStyle}>
+      <Link to={`/article/${article.slug}`} className="block shrink-0 overflow-hidden relative bg-neutral-100 aspect-video">
         {image}
       </Link>
       <div className="p-4 sm:p-5 flex flex-col flex-1">
@@ -106,7 +105,7 @@ const ArticleCard: React.FC<ArticleCardProps> = ({ article, compact = false, pri
           <div className="h-7 w-7 rounded-full overflow-hidden mr-2.5 bg-neutral-200 flex-shrink-0 flex items-center justify-center text-xs" aria-hidden="true">
             {article.author?.avatarUrl ? (
               <img
-                src={article.author.avatarUrl}
+                src={imageForDisplay(article.author.avatarUrl, 64)}
                 alt=""
                 width={28}
                 height={28}

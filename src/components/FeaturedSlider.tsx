@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronLeft, ChevronRight, Clock, Pause, Play } from 'lucide-react';
 import { Article } from '../types';
+import { imageForDisplay } from '../utils/imageDelivery';
 import { getCategoryLabel } from '../utils/categoryColors';
 
 interface FeaturedSliderProps {
@@ -9,6 +10,8 @@ interface FeaturedSliderProps {
 }
 
 const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const [isVisible, setIsVisible] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [isInteracting, setIsInteracting] = useState(false);
@@ -29,19 +32,28 @@ const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
   };
 
   useEffect(() => {
-    if (articles.length <= 1 || isPaused || isInteracting || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const node = sliderRef.current;
+    if (!node || !('IntersectionObserver' in window)) return;
+    const observer = new IntersectionObserver(([entry]) => setIsVisible(entry.isIntersecting));
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [articles.length]);
+
+  useEffect(() => {
+    if (!isVisible || articles.length <= 1 || isPaused || isInteracting || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
     const interval = setInterval(() => {
       if (!document.hidden) goToNext();
     }, 6000);
 
     return () => clearInterval(interval);
-  }, [articles.length, isPaused, isInteracting, goToNext]);
+  }, [articles.length, isPaused, isInteracting, isVisible, goToNext]);
 
   if (!articles.length) return null;
 
   return (
     <div
+      ref={sliderRef}
       className="featured-frame relative overflow-hidden rounded-2xl shadow-xl group bg-neutral-900"
       role="region"
       aria-label="Notícias em destaque"
@@ -56,26 +68,26 @@ const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
         const activeImage = articles[activeIndex].imageUrl;
         const activeReady = !activeImage || loadedImages.has(activeImage) || failedImages.has(activeImage);
         // Só o destaque atual e o próximo disputam a rede; os demais aguardam a navegação.
-        const shouldLoad = isActive || loadedImages.has(article.imageUrl) || (activeReady && index === (activeIndex + 1) % articles.length);
+        const shouldLoad = isActive || (isVisible && activeReady && index === (activeIndex + 1) % articles.length);
         const hasImage = Boolean(article.imageUrl && !failedImages.has(article.imageUrl));
         return (
           <div
             key={article.id || index}
             aria-hidden={!isActive}
-            className={`absolute inset-0 transition-opacity duration-700 ease-in-out ${
-              isActive ? 'opacity-100 z-10' : 'opacity-0 pointer-events-none z-0'
+            className={`absolute inset-0 ${
+              isActive ? 'block z-10' : 'hidden'
             }`}
           >
             <div className="relative h-full w-full">
               {shouldLoad && hasImage && <img
-                src={article.imageUrl}
+                src={imageForDisplay(article.imageUrl, 1280)}
                 alt={article.title}
                 width={1280}
                 height={720}
                 fetchPriority={isActive ? 'high' : 'low'}
-                loading={isActive ? 'eager' : 'lazy'}
+                loading="eager"
                 decoding="async"
-                onLoad={() => setLoadedImages(previous => new Set(previous).add(article.imageUrl))}
+                onLoad={() => setLoadedImages(previous => previous.has(article.imageUrl) ? previous : new Set(previous).add(article.imageUrl))}
                 onError={() => setFailedImages(previous => new Set(previous).add(article.imageUrl))}
                 className={`h-full w-full object-cover transition-opacity duration-500 ${loadedImages.has(article.imageUrl) ? 'opacity-100' : 'opacity-0'}`}
               />}
@@ -89,7 +101,7 @@ const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
                   <Link
                     tabIndex={isActive ? 0 : -1}
                     to={`/category/${article.category}`}
-                    className="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/20 backdrop-blur-md hover:bg-white/30 transition-colors duration-200"
+                    className="inline-block px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider bg-white/20 hover:bg-white/30 transition-colors duration-200"
                   >
                     {getCategoryLabel(article.category)}
                   </Link>
@@ -99,7 +111,7 @@ const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
                   </span>
                 </div>
 
-                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-2 md:mb-3 line-clamp-2 md:line-clamp-3 leading-tight drop-shadow-md">
+                <h2 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold mb-2 md:mb-3 line-clamp-2 md:line-clamp-3 leading-tight">
                   <Link tabIndex={isActive ? 0 : -1} to={`/article/${article.slug}`} className="hover:text-neutral-200 transition-colors">
                     {article.title}
                   </Link>
@@ -113,7 +125,7 @@ const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
                   <Link
                     tabIndex={isActive ? 0 : -1}
                     to={`/article/${article.slug}`}
-                    className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-white text-neutral-900 hover:bg-neutral-100 hover:shadow-lg transition-all duration-200"
+                    className="inline-flex items-center px-5 py-2.5 rounded-lg text-sm font-semibold bg-white text-neutral-900 hover:bg-neutral-100 hover:shadow-lg transition-colors duration-150"
                   >
                     Ler matéria completa
                   </Link>
@@ -129,14 +141,14 @@ const FeaturedSlider: React.FC<FeaturedSliderProps> = ({ articles }) => {
         <>
           <button
             onClick={goToPrev}
-            className="absolute top-1/2 left-3 sm:left-4 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white transition-all duration-200 z-20 opacity-80 hover:opacity-100 hover:scale-110"
+            className="absolute top-1/2 left-3 sm:left-4 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/40 hover:bg-black/70 text-white transition-colors duration-150 z-20 opacity-80 hover:opacity-100"
             aria-label="Notícia anterior"
           >
             <ChevronLeft className="h-5 w-5 sm:h-6 sm:w-6" />
           </button>
           <button
             onClick={goToNext}
-            className="absolute top-1/2 right-3 sm:right-4 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/40 hover:bg-black/70 backdrop-blur-sm text-white transition-all duration-200 z-20 opacity-80 hover:opacity-100 hover:scale-110"
+            className="absolute top-1/2 right-3 sm:right-4 -translate-y-1/2 p-2 sm:p-2.5 rounded-full bg-black/40 hover:bg-black/70 text-white transition-colors duration-150 z-20 opacity-80 hover:opacity-100"
             aria-label="Próxima notícia"
           >
             <ChevronRight className="h-5 w-5 sm:h-6 sm:w-6" />
