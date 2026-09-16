@@ -1,6 +1,6 @@
 import { plainText, safeHttpsUrl } from './editorial.js';
 
-const COMMONS_HOSTS = ['upload.wikimedia.org'];
+const COMMONS_HOSTS = ['upload.wikimedia.org', 'thumb.wikimedia.org'];
 const STOP_WORDS = new Set(['a', 'o', 'os', 'as', 'de', 'da', 'do', 'das', 'dos', 'e', 'em', 'no', 'na', 'the', 'of', 'and', 'with', 'photo', 'image', 'foto', 'imagem']);
 
 function normalize(value) {
@@ -15,13 +15,16 @@ export function relevanceScore(image, directive) {
   const haystack = ` ${normalize(`${image.title} ${image.description}`)} `;
   // Todas as palavras da entidade devem estar presentes, evitando confundir pessoas/produtos.
   if (!terms.every(term => haystack.includes(` ${term} `))) return 0;
-  return (haystack.includes(` ${subject} `) ? 100 : 70) + Math.min(image.width / 1600, 1);
+  const title = ` ${normalize(image.title)} `;
+  const namedPhoto = title.includes(` ${subject} `) ? 30 : 0;
+  const document = /\b(decreto|document|documento|oficio|pagenumber|cartoon)\b/.test(title) ? 80 : 0;
+  return (haystack.includes(` ${subject} `) ? 100 : 70) + namedPhoto - document + Math.min(image.width / 1600, 1);
 }
 
 export function selectRelevantImages(candidates, directive, count = 2) {
   const seen = new Set();
-  return candidates.filter(image => image && image.width >= 800 && image.height > 0
-    && image.width > image.height && image.width / image.height <= 2.5
+  return candidates.filter(image => image && image.width >= 400 && image.height >= 300
+    && image.width / image.height >= 0.4 && image.width / image.height <= 3
     && safeHttpsUrl(image.url) && safeHttpsUrl(image.sourceUrl) && image.credit && image.license
     && (!image.isStock || directive?.allowStock === true))
     .map(image => ({ ...image, score: relevanceScore(image, directive) }))
@@ -79,32 +82,67 @@ async function fetchJson(url, options = {}) {
   return response.json();
 }
 
-export async function collectArticleImages(directive, { pexelsApiKey } = {}) {
-  if (!directive || typeof directive.query !== 'string' || !directive.query.trim()) return [];
-  const candidates = [];
-  const params = new URLSearchParams({
-    action: 'query', generator: 'search', gsrnamespace: '6', gsrsearch: directive.query.slice(0, 180),
-    gsrlimit: '20', prop: 'imageinfo', iiprop: 'url|size|mime|extmetadata', iiurlwidth: '1600', format: 'json'
-  });
+export async function isWorkingImage(url) {
+  if (!safeHttpsUrl(url, [...COMMONS_HOSTS, 'images.pexels.com'])) return false;
   try {
-    const data = await fetchJson(`https://commons.wikimedia.org/w/api.php?${params}`, {
+    const response = await fetch(url, {
+      redirect: 'error', signal: AbortSignal.timeout(8000),
       headers: { 'User-Agent': 'AlpesNews/1.0 (https://alpesnews.vercel.app)' }
     });
-    candidates.push(...commonsCandidates(data));
-  } catch {
-    console.warn('Wikimedia indisponível; a imagem poderá ficar pendente de revisão.');
-  }
-  // Banco de imagens só para assuntos conceituais explicitamente classificados no prompt.
-  if (directive.allowStock === true && pexelsApiKey && selectRelevantImages(candidates, directive).length < 2) {
+    const valid = response.ok && /^image\/(jpeg|png|webp)(?:;|$)/i.test(response.headers.get('content-type') || '');
+    const reader = response.body?.getReader();
+    if (!reader) return false;
     try {
-      const data = await fetchJson(`https://api.pexels.com/v1/search?query=${encodeURIComponent(directive.query)}&per_page=12&orientation=landscape`, {
-        headers: { Authorization: pexelsApiKey }
+      if (!valid) return false;
+      const { value } = await reader.read();
+      return Boolean(value?.length >= 12 && (
+        (value[0] === 0xff && value[1] === 0xd8 && value[2] === 0xff)
+        || (value[0] === 0x89 && value[1] === 0x50 && value[2] === 0x4e && value[3] === 0x47)
+        || (String.fromCharCode(...value.slice(0, 4)) === 'RIFF' && String.fromCharCode(...value.slice(8, 12)) === 'WEBP')
+      ));
+    } finally { await reader.cancel(); }
+  } catch { return false; }
+}
+
+export async function collectArticleImages(directive, { pexelsApiKey } = {}) {
+  if (!directive || typeof directive.query !== 'string' || !directive.query.trim()) return [];
+  const selected = [];
+  const checked = new Set();
+  const searches = [directive, ...(Array.isArray(directive.alternatives) ? directive.alternatives.slice(0, 2) : [])]
+    .filter(item => typeof item?.subject === 'string' && typeof item?.query === 'string' && item.query.trim())
+    .map(item => ({ ...item, allowStock: directive.allowStock === true }));
+  for (const search of searches) {
+    const candidates = [];
+    const params = new URLSearchParams({
+      action: 'query', generator: 'search', gsrnamespace: '6', gsrsearch: search.query.slice(0, 180),
+      gsrlimit: '40', prop: 'imageinfo', iiprop: 'url|size|mime|extmetadata', iiurlwidth: '1280', iiurlheight: '1280', format: 'json'
+    });
+    try {
+      const data = await fetchJson(`https://commons.wikimedia.org/w/api.php?${params}`, {
+        headers: { 'User-Agent': 'AlpesNews/1.0 (https://alpesnews.vercel.app)' }
       });
-      candidates.push(...pexelsCandidates(data));
+      candidates.push(...commonsCandidates(data));
     } catch {
-      console.warn('Pexels indisponível; a imagem poderá ficar pendente de revisão.');
+      console.warn('Wikimedia indisponível; a imagem poderá ficar pendente de revisão.');
+    }
+    // Banco de imagens só para assuntos conceituais explicitamente classificados no prompt.
+    if (search.allowStock === true && pexelsApiKey && selectRelevantImages(candidates, search).length < 2) {
+      try {
+        const data = await fetchJson(`https://api.pexels.com/v1/search?query=${encodeURIComponent(search.query)}&per_page=12&orientation=landscape`, {
+          headers: { Authorization: pexelsApiKey }
+        });
+        candidates.push(...pexelsCandidates(data));
+      } catch {
+        console.warn('Pexels indisponível; a imagem poderá ficar pendente de revisão.');
+      }
+    }
+    for (const image of selectRelevantImages(candidates, search, 6)) {
+      if (checked.has(image.sourceUrl)) continue;
+      checked.add(image.sourceUrl);
+      if (await isWorkingImage(image.url)) selected.push(image);
+      if (selected.length === 2) return selected;
     }
   }
-  // Nunca inventar uma foto documental nem preencher com imagem aleatória.
-  return selectRelevantImages(candidates, directive);
+  console.log(`Imagens verificadas: ${selected.length}; arquivos candidatos testados: ${checked.size}.`);
+  return selected;
 }

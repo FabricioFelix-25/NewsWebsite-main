@@ -17,7 +17,9 @@ Regras obrigatórias:
 - Insira no máximo um marcador [IMAGEM_INTERNA], que será removido se nenhuma foto adequada existir.
 - Termine com fontes reais com links HTTPS e datas, sem inventar endereços oficiais.
 - imageDirective.subject deve identificar precisamente a pessoa, produto, organização ou lugar retratado.
-- imageDirective.query deve conter esse nome exato, sem verbos ou termos vagos. Não busque por um assunto apenas relacionado.
+- imageDirective.query deve ser uma busca curta pelo nome da entidade (sem título, data, verbos ou descrição do evento).
+- imageDirective.alternatives deve conter até 2 buscas alternativas: nome usual/sigla/tradução da MESMA entidade, ou outra pessoa/organização/local CENTRAL explicitamente citado nas fontes da matéria. subject deve ser o nome exato procurado nessa alternativa. Nunca use um produto de outra versão nem pessoa apenas relacionada.
+- Para temas conceituais, forneça também uma alternativa em inglês com subject e query curtos (ex.: cinema/movie theater). As imagens serão identificadas como ilustrativas/de arquivo.
 - allowStock deve ser false para pessoas, empresas, produtos, conflitos e acontecimentos específicos. Só use true para assuntos conceituais sem uma entidade específica.
 - eventDate e publishedAt usam ISO 8601 com fuso horário, nunca uma data futura. Datas informadas precisam ser encontradas nas fontes.
 
@@ -31,7 +33,7 @@ Retorne APENAS um JSON válido:
   "tags": ["tag1", "tag2"],
   "eventDate": "data ISO 8601 do fato principal verificado",
   "sources": [{"title": "Fonte consultada", "url": "https://...", "publishedAt": "data ISO 8601 da fonte"}],
-  "imageDirective": {"subject": "Entidade exata", "query": "Entidade exata", "allowStock": false}
+  "imageDirective": {"subject": "Entidade exata", "query": "Entidade exata", "allowStock": false, "alternatives": [{"subject":"Nome usual da entidade", "query":"Nome usual da entidade"}]}
 }`;
 }
 
