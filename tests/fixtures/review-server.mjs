@@ -35,6 +35,9 @@ const server = http.createServer(async (req, res) => {
   }
   if (path === '/auth/login') return body.email === 'editor@alpes.test' && body.password === 'revisao-local' ? send(200, { ...author, role: 'ADMIN', token: 'local-ui-fixture' }) : send(401, { message: 'Credenciais de teste inválidas.' });
   if (path === '/auth/me') return authenticated ? send(200, { ...author, role: 'ADMIN' }) : send(401, {});
+  if (path === '/editor-images') return authenticated ? send(200, { subject: 'Demonstração editorial', images: [
+    { url: 'http://127.0.0.1:19090/media/cover.svg', sourceUrl: 'https://example.test/foto', title: 'Foto de demonstração', description: 'Ilustração de teste local', credit: 'Redação de teste', license: 'Uso demonstrativo', width: 1600, height: 900 }
+  ] }) : send(401, {});
   if (path === '/articles/admin/42/preview') return authenticated ? send(200, draft) : send(401, {});
   if (path === '/articles/42/publish') {
     if (!authenticated) return send(401, {});

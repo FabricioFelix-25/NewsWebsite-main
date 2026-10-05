@@ -1,9 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { CheckCircle2, Eye, Save, Upload, X, Sparkles } from 'lucide-react';
 import { Article, Author } from '../../types';
 import RichTextEditor from './RichTextEditor';
-import { fetchAuthors, uploadImage } from '../../api';
+import { fetchAuthors, uploadImage, searchEditorialImages } from '../../api';
+import { applyEditorialCover, EditorialImage } from '../../utils/editorImages';
 import { sanitizeArticleHtml } from '../../utils/articleHtml';
 
 interface ArticleFormProps {
@@ -87,6 +88,12 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
   const [authors, setAuthors] = useState<Author[]>([]);
   const [formError, setFormError] = useState('');
   const [formSuccess, setFormSuccess] = useState('');
+  const [isSearchingImages, setIsSearchingImages] = useState(false);
+  const [imageSuggestions, setImageSuggestions] = useState<EditorialImage[]>([]);
+  const [imageQuery, setImageQuery] = useState('');
+  const [imageSubject, setImageSubject] = useState('');
+  const currentForm = useRef(formData);
+  currentForm.current = formData;
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -215,6 +222,46 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
     }));
   };
 
+  const handleChooseCover = (image: EditorialImage) => {
+    setFormData(previous => applyEditorialCover(previous, image));
+    setImagePreview(image.url);
+    setFormSuccess('Capa, créditos e fonte preenchidos. Confira a imagem antes de salvar.');
+  };
+
+  const handlePrepareDraft = async () => {
+    if (!formData.title?.trim() || !formData.content?.trim()) {
+      setFormError('Preencha o título e o texto para buscar fotos pela matéria.');
+      return;
+    }
+    setIsSearchingImages(true);
+    setFormError('');
+    setFormSuccess('');
+    const original = formData;
+    try {
+      const result = await searchEditorialImages(original, imageQuery);
+      setImageSuggestions(result.images);
+      setImageSubject(result.subject);
+      if (currentForm.current.title !== original.title || currentForm.current.content !== original.content || currentForm.current.imageUrl !== original.imageUrl) {
+        setFormSuccess('Fotos encontradas. Sua edição foi preservada; escolha uma capa abaixo.');
+        return;
+      }
+      setFormData(previous => {
+        const prepared = {
+          ...previous,
+          excerpt: previous.excerpt || buildExcerpt(previous.title || '', previous.content || ''),
+          tags: previous.tags?.length ? previous.tags : buildTagSuggestions(previous.title || '', previous.content || ''),
+          seoTitle: previous.seoTitle || previous.title?.slice(0, 70),
+          seoDescription: previous.seoDescription || (previous.excerpt || buildExcerpt(previous.title || '', previous.content || '')).slice(0, 160),
+        };
+        return !previous.imageUrl && result.images[0] ? applyEditorialCover(prepared, result.images[0]) : prepared;
+      });
+      if (!original.imageUrl && result.images[0]) setImagePreview(result.images[0].url);
+      setFormSuccess(result.images.length ? 'Fotos verificadas e campos complementares preparados. Confira as opções de capa abaixo.' : 'Campos complementares preparados. Não encontrei foto pertinente; tente outro nome no assunto da foto.');
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : 'Não foi possível preparar as imagens.');
+    } finally { setIsSearchingImages(false); }
+  };
+
   const validateForm = (): string | null => {
     if (!formData.title?.trim()) return 'Informe o titulo do artigo.';
     if (!formData.content?.trim()) return 'Informe o conteudo do artigo.';
@@ -306,9 +353,12 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <div>
                 <p className="text-sm font-medium text-blue-900">Assistente editorial</p>
-                <p className="text-xs text-blue-700">Acelere cadastro de artigos com resumo, tags e SEO automaticos.</p>
+                <p className="text-xs text-blue-700">Prepare fotos, créditos, resumo e SEO para revisar a matéria com menos etapas.</p>
               </div>
               <div className="flex gap-2 flex-wrap">
+                <button type="button" onClick={handlePrepareDraft} disabled={isSearchingImages} className="px-3 py-2 rounded-md bg-blue-700 text-white text-sm disabled:opacity-60">
+                  {isSearchingImages ? 'Buscando fotos…' : 'Preparar matéria e fotos'}
+                </button>
                 <button type="button" onClick={handleGenerateExcerpt} className="px-3 py-2 rounded-md bg-white border border-blue-300 text-blue-800 text-sm">
                   Gerar resumo
                 </button>
@@ -504,6 +554,20 @@ const ArticleForm: React.FC<ArticleFormProps> = ({ article, onSave, onPreview })
 
           <div>
             <label className="block text-sm font-medium mb-1">Imagem de capa</label>
+            <div className="space-y-3 mb-4 rounded-lg border border-blue-200 bg-blue-50 p-3">
+              <label htmlFor="imageQuery" className="block text-sm font-medium">Assunto da foto (opcional)</label>
+              <input id="imageQuery" value={imageQuery} onChange={event => setImageQuery(event.target.value)} maxLength={180} placeholder="Deixe vazio para buscar pela matéria" className="w-full rounded-md border border-neutral-300 p-2 text-sm" />
+              <button type="button" onClick={handlePrepareDraft} disabled={isSearchingImages} className="rounded-md bg-blue-700 px-3 py-2 text-sm text-white disabled:opacity-60">{isSearchingImages ? 'Buscando fotos…' : 'Buscar fotos para esta matéria'}</button>
+              {imageSubject && <p className="text-sm text-neutral-600">Fotos sobre: {imageSubject}. Imagens de arquivo/ilustrativas, com créditos e licença.</p>}
+              {imageSuggestions.length > 0 && <div className="grid grid-cols-1 gap-3">
+                {imageSuggestions.map(image => <div key={image.sourceUrl} className="rounded-lg border border-neutral-200 bg-white p-2">
+                  <img src={image.url} alt={image.description} width={image.width} height={image.height} loading="lazy" decoding="async" className="aspect-video w-full rounded-md object-cover" />
+                  <p className="mt-2 text-xs text-neutral-600 line-clamp-2">{image.title}</p>
+                  <p className="mt-1 text-xs text-neutral-500">{image.credit} · {image.license}</p>
+                  <div className="mt-2 flex items-center gap-3"><button type="button" onClick={() => handleChooseCover(image)} className="rounded bg-blue-700 px-2 py-1 text-xs text-white">{formData.imageUrl === image.url ? 'Capa selecionada' : 'Usar como capa'}</button><a href={image.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-700 underline">Ver origem</a></div>
+                </div>)}
+              </div>}
+            </div>
             <div className="border border-neutral-300 rounded-md p-4">
               {imagePreview ? (
                 <div className="mb-4">

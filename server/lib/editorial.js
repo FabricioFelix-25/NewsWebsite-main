@@ -87,11 +87,18 @@ export function buildDraftPayload(article, topic, images = [], now = Date.now(),
     groundingChunks: (article.groundedSources || []).map(web => ({ web }))
   }, now);
   let imageIndex = 1;
-  const content = article.content.replace(/\[IMAGEM_INTERNA(?:_\d+)?\]/g, () => {
+  let content = article.content.replace(/\[IMAGEM_INTERNA(?:_\d+)?\]/g, () => {
     const image = images[imageIndex++];
     if (!image) return '';
     return `<figure class="my-6 max-w-3xl mx-auto"><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.description)}" width="${image.width}" height="${image.height}" loading="lazy" decoding="async" class="w-full h-auto rounded-xl" /><figcaption class="text-xs text-neutral-500 mt-2">Imagem de arquivo/ilustrativa: ${escapeHtml(image.description)}. Crédito: ${escapeHtml(image.credit)}. <a href="${escapeHtml(image.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(image.license)}</a>.</figcaption></figure>`;
   });
+  // Se o modelo omitir o marcador, a segunda foto continua entrando no corpo.
+  if (images[1] && imageIndex === 1) {
+    const image = images[1];
+    const figure = `<figure class="my-6 max-w-3xl mx-auto"><img src="${escapeHtml(image.url)}" alt="${escapeHtml(image.description)}" width="${image.width}" height="${image.height}" loading="lazy" decoding="async" /><figcaption>Imagem de arquivo/ilustrativa: ${escapeHtml(image.description)}. Crédito: ${escapeHtml(image.credit)}. <a href="${escapeHtml(image.sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(image.license)}</a>.</figcaption></figure>`;
+    const firstSection = content.indexOf('</p>');
+    content = firstSection >= 0 ? content.slice(0, firstSection + 4) + figure + content.slice(firstSection + 4) : content + figure;
+  }
   const coverCredit = images[0]
     ? `<p class="text-xs text-neutral-500">Imagem de capa de arquivo/ilustrativa: ${escapeHtml(images[0].description)}. Crédito: ${escapeHtml(images[0].credit)}. <a href="${escapeHtml(images[0].sourceUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(images[0].license)}</a>.</p>`
     : '';
@@ -103,6 +110,9 @@ export function buildDraftPayload(article, topic, images = [], now = Date.now(),
     category: article.category,
     tags: article.tags,
     imageUrl: images[0]?.url || '',
+    seoTitle: plainText(article.title).slice(0, 70),
+    seoDescription: plainText(article.excerpt).slice(0, 160),
+    seoImage: images[0]?.url || '',
     authorId,
     isDraft: true,
     featured: false,

@@ -1,4 +1,16 @@
 import { Article, Author } from '../types';
+import type { EditorialImage } from '../utils/editorImages';
+
+export async function searchEditorialImages(article: Partial<Article>, query = ''): Promise<{ subject: string; images: EditorialImage[] }> {
+  const response = await fetch('/api/editor-images', {
+    method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+    body: JSON.stringify({ title: article.title, content: article.content, tags: article.tags, query }),
+    signal: AbortSignal.timeout(115000),
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error || 'Não foi possível buscar fotos para esta matéria.');
+  return result;
+}
 
 const DEFAULT_API_BASE_URL = 'http://localhost:9090/api';
 const AUTH_TOKEN_STORAGE_KEY = 'auth_token';

@@ -15,10 +15,14 @@ export function relevanceScore(image, directive) {
   const haystack = ` ${normalize(`${image.title} ${image.description}`)} `;
   // Todas as palavras da entidade devem estar presentes, evitando confundir pessoas/produtos.
   if (!terms.every(term => haystack.includes(` ${term} `))) return 0;
+  // Números de modelo precisam pertencer à mesma expressão, não a outro aparelho/SO.
+  if (terms.some(term => /^\d+$/.test(term)) && !haystack.includes(` ${subject} `)) return 0;
   const title = ` ${normalize(image.title)} `;
   const namedPhoto = title.includes(` ${subject} `) ? 30 : 0;
   const document = /\b(decreto|document|documento|oficio|pagenumber|cartoon)\b/.test(title) ? 80 : 0;
-  return (haystack.includes(` ${subject} `) ? 100 : 70) + namedPhoto - document + Math.min(image.width / 1600, 1);
+  const ratio = image.width / image.height;
+  const coverFit = ratio >= 1.2 && ratio <= 2 ? 18 : ratio > 1 ? 8 : 0;
+  return (haystack.includes(` ${subject} `) ? 100 : 70) + namedPhoto - document + coverFit + Math.min(image.width / 1600, 1);
 }
 
 export function selectRelevantImages(candidates, directive, count = 2) {
@@ -28,7 +32,7 @@ export function selectRelevantImages(candidates, directive, count = 2) {
     && safeHttpsUrl(image.url) && safeHttpsUrl(image.sourceUrl) && image.credit && image.license
     && (!image.isStock || directive?.allowStock === true))
     .map(image => ({ ...image, score: relevanceScore(image, directive) }))
-    .filter(image => image.score > 0)
+    .filter(image => image.score >= 70)
     .sort((a, b) => b.score - a.score)
     .filter(image => {
       const key = image.sourceUrl;
@@ -104,14 +108,15 @@ export async function isWorkingImage(url) {
   } catch { return false; }
 }
 
-export async function collectArticleImages(directive, { pexelsApiKey } = {}) {
+export async function collectArticleImages(directive, { pexelsApiKey, count = 2 } = {}) {
   if (!directive || typeof directive.query !== 'string' || !directive.query.trim()) return [];
   const selected = [];
   const checked = new Set();
+  const limit = Math.max(1, Math.min(4, Number(count) || 2));
   const searches = [directive, ...(Array.isArray(directive.alternatives) ? directive.alternatives.slice(0, 2) : [])]
     .filter(item => typeof item?.subject === 'string' && typeof item?.query === 'string' && item.query.trim())
     .map(item => ({ ...item, allowStock: directive.allowStock === true }));
-  for (const search of searches) {
+  const groups = await Promise.all(searches.map(async (search, index) => {
     const candidates = [];
     const params = new URLSearchParams({
       action: 'query', generator: 'search', gsrnamespace: '6', gsrsearch: search.query.slice(0, 180),
@@ -126,7 +131,7 @@ export async function collectArticleImages(directive, { pexelsApiKey } = {}) {
       console.warn('Wikimedia indisponível; a imagem poderá ficar pendente de revisão.');
     }
     // Banco de imagens só para assuntos conceituais explicitamente classificados no prompt.
-    if (search.allowStock === true && pexelsApiKey && selectRelevantImages(candidates, search).length < 2) {
+    if (search.allowStock === true && pexelsApiKey) {
       try {
         const data = await fetchJson(`https://api.pexels.com/v1/search?query=${encodeURIComponent(search.query)}&per_page=12&orientation=landscape`, {
           headers: { Authorization: pexelsApiKey }
@@ -136,13 +141,18 @@ export async function collectArticleImages(directive, { pexelsApiKey } = {}) {
         console.warn('Pexels indisponível; a imagem poderá ficar pendente de revisão.');
       }
     }
-    for (const image of selectRelevantImages(candidates, search, 6)) {
-      if (checked.has(image.sourceUrl)) continue;
-      checked.add(image.sourceUrl);
-      if (await isWorkingImage(image.url)) selected.push(image);
-      if (selected.length === 2) return selected;
-    }
+    return selectRelevantImages(candidates, search, 8).map(image => ({ ...image, score: image.score + (index === 0 ? 40 : 0) }));
+  }));
+  const ranked = groups.flat().sort((a, b) => b.score - a.score).filter(image => {
+    if (checked.has(image.sourceUrl)) return false;
+    checked.add(image.sourceUrl);
+    return true;
+  }).slice(0, 12);
+  for (let offset = 0; offset < ranked.length && selected.length < limit; offset += 3) {
+    const batch = ranked.slice(offset, offset + 3);
+    const working = await Promise.all(batch.map(image => isWorkingImage(image.url)));
+    selected.push(...batch.filter((_, index) => working[index]));
   }
-  console.log(`Imagens verificadas: ${selected.length}; arquivos candidatos testados: ${checked.size}.`);
-  return selected;
+  console.log(`Imagens verificadas: ${Math.min(selected.length, limit)}; candidatos pertinentes: ${ranked.length}.`);
+  return selected.slice(0, limit);
 }

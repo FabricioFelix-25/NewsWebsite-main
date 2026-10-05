@@ -1,5 +1,5 @@
 {
-  "functions": { "api/telegram.js": { "maxDuration": 300 } },
+  "functions": { "api/telegram.js": { "maxDuration": 300 }, "api/editor-images.js": { "maxDuration": 120 } },
   "headers": [
     {
       "source": "/admin/:path*",
