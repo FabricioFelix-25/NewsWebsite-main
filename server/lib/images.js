@@ -1,6 +1,8 @@
 import { plainText, safeHttpsUrl } from './editorial.js';
 import { buildImageContext, matchesImageContext } from './image-context.js';
 import { verifyImageCandidates } from './image-verification.js';
+import { prepareImagePlan } from './image-plan.js';
+import { verifyPlanAliases } from './image-identity.js';
 
 const COMMONS_HOSTS = ['upload.wikimedia.org', 'thumb.wikimedia.org'];
 const STOP_WORDS = new Set(['a', 'o', 'os', 'as', 'de', 'da', 'do', 'das', 'dos', 'e', 'em', 'no', 'na', 'the', 'of', 'and', 'with', 'photo', 'image', 'foto', 'imagem']);
@@ -8,6 +10,10 @@ const STOP_WORDS = new Set(['a', 'o', 'os', 'as', 'de', 'da', 'do', 'das', 'dos'
 function normalize(value) {
   return plainText(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
     .replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function searchSubject(search) {
+  return search.kind === 'place' ? search.subject.replace(/\b(estádio|estadio)\b/gi, 'stadium').replace(/\bcidade\b/gi, 'city').trim() : search.subject;
 }
 
 export function relevanceScore(image, directive) {
@@ -112,20 +118,42 @@ export async function isWorkingImage(url) {
   } catch { return false; }
 }
 
-export async function collectArticleImages(directive, { pexelsApiKey, count = 2, article, ai } = {}) {
+export async function collectArticleImages(directive, { pexelsApiKey, count = 2, article, ai, plan, queryOverride } = {}) {
+  let context = null;
+  if (article) {
+    if (!ai) return [];
+    try {
+      const verifiedPlan = await verifyPlanAliases(plan || await prepareImagePlan(ai, article));
+      context = buildImageContext(article, verifiedPlan);
+      const names = [verifiedPlan.focus.name, ...(verifiedPlan.focus.verifiedAliases || [])];
+      const knownNames = new Set(names.map(normalize));
+      const alternatives = verifiedPlan.alternatives.filter(item => item.kind === 'place'
+        || (knownNames.has(normalize(item.subject)) && knownNames.has(normalize(item.query))));
+      for (const alias of names.slice(1)) {
+        if (alternatives.length >= 2) break;
+        if (!alternatives.some(item => normalize(item.query) === normalize(alias))) {
+          alternatives.push({ subject: alias, query: alias, kind: verifiedPlan.focus.kind });
+        }
+      }
+      directive = { ...verifiedPlan, kind: verifiedPlan.focus.kind, alternatives,
+        subject: knownNames.has(normalize(verifiedPlan.query)) ? verifiedPlan.query : verifiedPlan.focus.name,
+        query: queryOverride?.trim() || (knownNames.has(normalize(verifiedPlan.query)) ? verifiedPlan.query : verifiedPlan.focus.name) };
+    } catch {
+      console.warn('Foco da imagem não pôde ser confirmado; a foto ficará pendente de revisão.');
+      return [];
+    }
+  }
   if (!directive || typeof directive.query !== 'string' || !directive.query.trim()) return [];
   const selected = [];
   const checked = new Set();
   const limit = Math.max(1, Math.min(4, Number(count) || 2));
-  const context = article ? buildImageContext(article) : null;
-  if (context && !ai) return [];
   const searches = [directive, ...(Array.isArray(directive.alternatives) ? directive.alternatives.slice(0, 2) : [])]
     .filter(item => typeof item?.subject === 'string' && typeof item?.query === 'string' && item.query.trim())
     .map(item => ({ ...item, allowStock: directive.allowStock === true }));
   const groups = await Promise.all(searches.map(async (search, index) => {
     const candidates = [];
     const params = new URLSearchParams({
-      action: 'query', generator: 'search', gsrnamespace: '6', gsrsearch: search.query.slice(0, 180),
+      action: 'query', generator: 'search', gsrnamespace: '6', gsrsearch: (search.kind === 'place' ? searchSubject(search) : search.query).slice(0, 180),
       gsrlimit: '40', prop: 'imageinfo|categories', cllimit: '50', iiprop: 'url|size|mime|extmetadata', iiurlwidth: '1280', iiurlheight: '1280', format: 'json'
     });
     try {
@@ -147,7 +175,7 @@ export async function collectArticleImages(directive, { pexelsApiKey, count = 2,
         console.warn('Pexels indisponível; a imagem poderá ficar pendente de revisão.');
       }
     }
-    return selectRelevantImages(candidates.filter(image => matchesImageContext(image, context)), search, 8).map(image => ({ ...image, score: image.score + (index === 0 ? 40 : 0) }));
+    return selectRelevantImages(candidates.filter(image => matchesImageContext(image, context)), { ...search, subject: searchSubject(search) }, 8).map(image => ({ ...image, score: image.score + (index === 0 ? 40 : 0) }));
   }));
   const ranked = groups.flat().sort((a, b) => b.score - a.score).filter(image => {
     if (checked.has(image.sourceUrl)) return false;

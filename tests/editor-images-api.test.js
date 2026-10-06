@@ -7,7 +7,8 @@ import handler from '../api/editor-images.js';
 
 afterEach(() => { vi.unstubAllGlobals(); vi.clearAllMocks(); });
 function response() { return { code: 0, body: null, setHeader: vi.fn(), status(code) { this.code = code; return this; }, json(body) { this.body = body; return this; } }; }
-const request = (body = {}) => ({ method: 'POST', headers: { authorization: 'Bearer offline' }, body: { title: 'Produto novo', content: '<p>Texto revisado</p>', ...body } });
+const request = (body = {}) => ({ method: 'POST', headers: { authorization: 'Bearer offline' }, body: { title: 'Surface Pro 11', content: '<p>Texto revisado</p>', ...body } });
+const plan = (name, kind = 'product') => ({ subject: name, query: name, allowStock: false, alternatives: [], focus: { name, aliases: [], kind } });
 
 describe('busca editorial protegida', () => {
   it('trata indisponibilidade da autenticação sem acusar sessão expirada e limita tags', async () => {
@@ -30,20 +31,21 @@ describe('busca editorial protegida', () => {
   });
   it('extrai entidade para editor e retorna fotos verificadas, sem salvar artigo', async () => {
     const fetch = vi.fn().mockResolvedValue(Response.json({ id: 10, role: 'EDITOR' })); vi.stubGlobal('fetch', fetch);
-    mocks.generate.mockResolvedValue({ text: JSON.stringify({ subject: 'Surface Pro 11', query: 'Surface Pro 11', allowStock: false }) });
+    mocks.generate.mockResolvedValue({ text: JSON.stringify(plan('Surface Pro 11')) });
     mocks.collect.mockResolvedValue([{ url: 'https://thumb.wikimedia.org/photo.jpg', credit: 'Autora', license: 'CC BY 4.0' }]);
     const res = response(); await handler(request(), res);
     expect(res.code).toBe(200); expect(res.body.images).toHaveLength(1);
     expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0][0]).toMatch(/\/auth\/me$/);
-    expect(mocks.collect).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Surface Pro 11' }), expect.objectContaining({ count: 4, article: expect.objectContaining({ title: 'Produto novo' }), ai: expect.any(Object) }));
+    expect(mocks.collect).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Surface Pro 11' }), expect.objectContaining({ count: 4, article: expect.objectContaining({ title: 'Surface Pro 11' }), ai: expect.any(Object) }));
   });
-  it('busca manual dispensa IA e limita requisições repetidas', async () => {
+  it('busca manual preserva entidade central e limita requisições repetidas', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ id: 11, role: 'ADMIN' })));
     mocks.collect.mockResolvedValue([]);
-    const first = response(); await handler(request({ query: 'Alexandre de Moraes' }), first); expect(first.code).toBe(200);
-    expect(mocks.generate).not.toHaveBeenCalled();
-    expect(mocks.collect).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Alexandre de Moraes' }), expect.objectContaining({ article: expect.objectContaining({ title: 'Produto novo' }), ai: expect.any(Object) }));
-    const second = response(); await handler(request({ query: 'Alexandre de Moraes' }), second); expect(second.code).toBe(429);
+    mocks.generate.mockResolvedValue({ text: JSON.stringify(plan('SpaceX', 'organization')) });
+    const first = response(); await handler(request({ title: 'SpaceX prepara lançamento', query: 'Blue Origin' }), first); expect(first.code).toBe(200);
+    expect(mocks.generate).toHaveBeenCalledTimes(1);
+    expect(mocks.collect).toHaveBeenCalledWith(expect.objectContaining({ subject: 'SpaceX' }), expect.objectContaining({ article: expect.objectContaining({ title: 'SpaceX prepara lançamento' }), queryOverride: 'Blue Origin', ai: expect.any(Object) }));
+    const second = response(); await handler(request({ query: 'Blue Origin' }), second); expect(second.code).toBe(429);
   });
   it('limita corpo inválido e não revela detalhes de falhas externas', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(Response.json({ id: 12, role: 'ADMIN' })).mockRejectedValueOnce(new Error('secret-token')));

@@ -17,3 +17,16 @@ As chaves existentes `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `GEMINI_API_KEY` 
 O procedimento registra somente `https://alpesnews.vercel.app/api/telegram`. Se o bot estiver vinculado a outro endereço, ele para antes de alterar a configuração. Filtros, limite de conexões e mensagens pendentes são preservados.
 
 Depois de trocar o token do bot ou o segredo explícito, é necessário executar `configure` novamente. O workflow de configuração não altera o agendamento de notícias.
+
+## Alterações na seleção de fotos
+
+O editor, o webhook e o bot agendado usam os mesmos helpers de identidade, contexto, pesquisa e revisão dos pixels. Uma pesquisa manual altera a consulta, mas mantém o protagonista da matéria como critério de aprovação. Aliases de entidades específicas vêm da confirmação no Wikidata. Fotos de arquivo preservam origem, licença e crédito; revisão humana e autorização de publicação não são preenchidas pela IA.
+
+Antes de cada atualização desse fluxo:
+
+1. Executar `npm test`, `npm run build` e `npm run lint` no frontend, além de `npm test` no bot. Conferir que os helpers compartilhados correspondem à mesma versão.
+2. Executar **Verifica busca de imagens** na branch do bot. O teste consulta Commons e Gemini, sem salvar artigos ou enviar Telegram. Indisponibilidade do modelo não conta como recusa visual correta.
+3. Somente após a integração real passar, promover as mudanças a `main` e conferir a conclusão do deploy da Vercel.
+4. Conferir as rotas públicas e a proteção de `/api/editor-images` (405 em GET e 401 em POST anônimo). Para mudanças no webhook, executar também o workflow `verify` com corpo vazio.
+
+Se não houver imagem pertinente com aprovação clara, ou se ambos os modelos de análise estiverem indisponíveis, nenhuma foto é aplicada. Conferir cota e logs antes de repetir buscas. A análise visual usa `gemini-2.5-flash` com alternativa estável `gemini-3.8-flash`; disponibilidade e cotas dependem do projeto da chave configurada.
