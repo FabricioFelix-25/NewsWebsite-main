@@ -18,6 +18,8 @@ Regras obrigatórias:
 - Insira no máximo um marcador [IMAGEM_INTERNA], que será removido se nenhuma foto adequada existir.
 - Termine com fontes reais com links HTTPS e datas, sem inventar endereços oficiais.
 - imageDirective.subject deve identificar precisamente a pessoa, produto, organização ou lugar retratado.
+- Para seleções/equipes, informe SEMPRE modalidade, masculina/feminina e categoria principal/sub-17/sub-20 quando aplicável, no lide e no assunto da foto. Uma foto da equipe feminina ou juvenil não serve para a principal masculina.
+- Busque nomes equivalentes em português e inglês preservando a mesma categoria (ex.: Brazil men's national football team). Se não houver foto da equipe exata, prefira o estádio citado ou um jogador central citado, como foto de arquivo, e inclua essa alternativa.
 - imageDirective.query deve ser uma busca curta pelo nome da entidade (sem título, data, verbos ou descrição do evento).
 - imageDirective.alternatives deve conter até 2 buscas alternativas: nome usual/sigla/tradução da MESMA entidade, ou outra pessoa/organização/local CENTRAL explicitamente citado nas fontes da matéria. subject deve ser o nome exato procurado nessa alternativa. Nunca use um produto de outra versão nem pessoa apenas relacionada.
 - Para temas conceituais, forneça também uma alternativa em inglês com subject e query curtos (ex.: cinema/movie theater). As imagens serão identificadas como ilustrativas/de arquivo.

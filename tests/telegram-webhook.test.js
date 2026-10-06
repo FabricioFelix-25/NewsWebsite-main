@@ -187,6 +187,8 @@ describe('criação e revisão de rascunhos', () => {
     await handler(request(), res);
 
     expect(res.json).toHaveBeenCalledWith({ status: 'draft_saved', articleId: 784 });
+    expect(mocks.collectArticleImages).toHaveBeenCalledWith(article.imageDirective,
+      expect.objectContaining({ article, ai: expect.any(Object) }));
     const saveCalls = outgoingTo(API_URL);
     expect(saveCalls).toHaveLength(1);
     expect(saveCalls[0][1].method).toBe('POST');

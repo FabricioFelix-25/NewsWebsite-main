@@ -85,7 +85,7 @@ export default async function handler(req, res) {
     const topic = filterRecentItems(feed.items)[0];
     if (!topic) throw new Error('Não encontrei uma pauta com data válida nos últimos 7 dias.');
     const article = await generateArticle(ai, topic);
-    const images = await collectArticleImages(article.imageDirective, { pexelsApiKey: process.env.PEXELS_API_KEY });
+    const images = await collectArticleImages(article.imageDirective, { pexelsApiKey: process.env.PEXELS_API_KEY, article, ai });
     const payload = buildDraftPayload(article, topic, images, Date.now(), authorId);
     const response = await fetch(apiUrl, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-KEY': process.env.APP_AI_API_KEY },

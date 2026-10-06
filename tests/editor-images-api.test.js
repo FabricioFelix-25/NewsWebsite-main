@@ -35,13 +35,14 @@ describe('busca editorial protegida', () => {
     const res = response(); await handler(request(), res);
     expect(res.code).toBe(200); expect(res.body.images).toHaveLength(1);
     expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0][0]).toMatch(/\/auth\/me$/);
-    expect(mocks.collect).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Surface Pro 11' }), expect.objectContaining({ count: 4 }));
+    expect(mocks.collect).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Surface Pro 11' }), expect.objectContaining({ count: 4, article: expect.objectContaining({ title: 'Produto novo' }), ai: expect.any(Object) }));
   });
   it('busca manual dispensa IA e limita requisições repetidas', async () => {
     vi.stubGlobal('fetch', vi.fn().mockImplementation(async () => Response.json({ id: 11, role: 'ADMIN' })));
     mocks.collect.mockResolvedValue([]);
     const first = response(); await handler(request({ query: 'Alexandre de Moraes' }), first); expect(first.code).toBe(200);
     expect(mocks.generate).not.toHaveBeenCalled();
+    expect(mocks.collect).toHaveBeenCalledWith(expect.objectContaining({ subject: 'Alexandre de Moraes' }), expect.objectContaining({ article: expect.objectContaining({ title: 'Produto novo' }), ai: expect.any(Object) }));
     const second = response(); await handler(request({ query: 'Alexandre de Moraes' }), second); expect(second.code).toBe(429);
   });
   it('limita corpo inválido e não revela detalhes de falhas externas', async () => {
