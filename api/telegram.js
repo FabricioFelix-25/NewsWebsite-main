@@ -117,6 +117,8 @@ export default async function handler(req, res) {
   if (handledUpdates.size > 1000) handledUpdates.delete(handledUpdates.keys().next().value);
   handledUpdates.set(updateId, Date.now());
   let savedId;
+  let saveConfirmed = false;
+  let stage = 'configuração';
   try {
     const text = message.text.trim().slice(0, 3000);
     if (text === '/start') {
@@ -130,6 +132,7 @@ export default async function handler(req, res) {
     if (!Number.isSafeInteger(authorId) || authorId < 1) throw new Error('Autor inválido.');
     const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
     const history = getConversation(chatId);
+    stage = 'interpretação do pedido';
     const decision = await classifyIntent(ai, text, history);
     if (decision.intent === 'CHAT') {
       const reply = String(decision.reply || 'Não consegui responder com segurança. Pode reformular a pergunta?').slice(0, 3500);
@@ -139,28 +142,39 @@ export default async function handler(req, res) {
     }
     const topicText = String(decision.topic || text).slice(0, 180);
     await sendMessage(chatId, `Pesquisando uma pauta recente sobre: ${topicText}. A matéria será salva como rascunho para sua revisão.`);
+    stage = 'busca de notícias recentes';
     const parser = new Parser({ timeout: 12000 });
     const feed = await parser.parseURL(`https://news.google.com/rss/search?q=${encodeURIComponent(topicText + ' when:7d')}&hl=pt-BR&gl=BR&ceid=BR:pt-419`);
     const topic = filterRecentItems(feed.items)[0];
     if (!topic) throw new Error('Não encontrei uma pauta com data válida nos últimos 7 dias.');
+    stage = 'redação e checagem da matéria';
     const article = await generateArticle(ai, topic);
+    stage = 'seleção de imagens';
     const images = await collectArticleImages(article.imageDirective, { pexelsApiKey: process.env.PEXELS_API_KEY, article, ai });
     const payload = buildDraftPayload(article, topic, images, Date.now(), authorId);
+    stage = 'salvamento do rascunho';
     const response = await fetch(apiUrl, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-API-KEY': process.env.APP_AI_API_KEY },
       body: JSON.stringify(payload), signal: AbortSignal.timeout(45000),
     });
     if (!response.ok) throw new Error('O backend não confirmou o rascunho.');
+    saveConfirmed = true;
     const saved = await response.json();
     savedId = saved.id;
+    if (!Number.isSafeInteger(Number(savedId)) || Number(savedId) < 1) throw new Error('O backend confirmou o salvamento sem retornar um ID válido.');
+    stage = 'envio do link de revisão';
     await sendMessage(chatId, buildTelegramNotification({ ...payload, ...saved }, process.env.SITE_URL || 'https://alpesnews.vercel.app'));
     return res.status(200).json({ status: 'draft_saved', articleId: savedId });
-  } catch {
+  } catch (error) {
     // Never echo SDK errors, tokens or article text into logs or an unverified chat.
+    const errorName = error instanceof Error ? error.name : 'UnknownError';
+    console.error(`[telegram] etapa=${stage}; erro=${errorName}; salvamento_confirmado=${saveConfirmed}`);
     const reply = savedId
-      ? `O rascunho ${savedId} foi salvo. Abra o painel para revisá-lo; não é necessário gerar novamente.`
-      : 'Não foi possível concluir a pesquisa ou confirmar o salvamento. Confira o painel antes de repetir para evitar duplicidade. Nenhuma publicação foi autorizada.';
+      ? `O rascunho ${savedId} foi salvo, mas não consegui enviar o link de revisão. Abra Gestão de artigos e busque pelo título; não gere novamente.`
+      : saveConfirmed
+        ? 'O backend confirmou o salvamento, mas não recebi o ID do rascunho. Confira Gestão de artigos antes de tentar de novo para evitar duplicidade.'
+        : `Não consegui concluir a etapa: ${stage}. Nenhum rascunho foi confirmado e nada foi publicado. Tente novamente mais tarde; se persistir, envie este aviso ao suporte.`;
     try { await sendMessage(chatId, reply); } catch { /* Delivery is best effort; avoid Telegram retry creating another article. */ }
-    return res.status(200).json({ status: savedId ? 'notification_failed' : 'processing_failed' });
+    return res.status(200).json({ status: saveConfirmed ? 'notification_failed' : 'processing_failed' });
   }
 }

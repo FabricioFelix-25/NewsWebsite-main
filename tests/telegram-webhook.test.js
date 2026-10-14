@@ -271,6 +271,23 @@ describe('criação e revisão de rascunhos', () => {
     expect(mocks.generateArticle).not.toHaveBeenCalled();
     expect(mocks.collectArticleImages).not.toHaveBeenCalled();
     expect(outgoingTo(API_URL)).toHaveLength(0);
+    const failureMessage = outgoingTo(TELEGRAM_URL).map(([, options]) => JSON.parse(options.body).text).at(-1);
+    expect(failureMessage).toContain('busca de notícias recentes');
+    expect(failureMessage).toContain('Nenhum rascunho foi confirmado');
+  });
+
+  it('avisa para conferir o painel quando o backend salvou mas não devolveu JSON utilizável', async () => {
+    mocks.fetch.mockImplementation(async url => {
+      if (url === API_URL) return { ok: true, json: async () => ({}) };
+      if (url === TELEGRAM_URL) return { ok: true, json: async () => ({ ok: true }) };
+      throw new Error('Requisição inesperada bloqueada pelo teste offline.');
+    });
+    const res = response();
+    await handler(request(), res);
+    expect(res.json).toHaveBeenCalledWith({ status: 'notification_failed' });
+    const failureMessage = outgoingTo(TELEGRAM_URL).map(([, options]) => JSON.parse(options.body).text).at(-1);
+    expect(failureMessage).toContain('O backend confirmou o salvamento');
+    expect(failureMessage).toContain('Confira Gestão de artigos');
   });
 });
 
