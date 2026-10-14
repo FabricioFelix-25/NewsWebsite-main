@@ -270,3 +270,31 @@ describe('criação e revisão de rascunhos', () => {
     expect(outgoingTo(API_URL)).toHaveLength(0);
   });
 });
+
+describe('conversa e pedidos de informação', () => {
+  it('usa o contexto em cobranças curtas e entrega links de fontes da pesquisa', async () => {
+    mocks.classify
+      .mockResolvedValueOnce({ text: JSON.stringify({ intent: 'CHAT', reply: 'Estou verificando as últimas novidades sobre o diretor da Rockstar.' }) })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ intent: 'CHAT', reply: 'Desculpe, minha resposta anterior ficou incompleta. Aqui estão as novidades verificadas sobre o diretor da Rockstar.' }),
+        candidates: [{ groundingMetadata: { groundingChunks: [{ web: { uri: 'https://source.invalid/rockstar', title: 'Fonte sobre Rockstar' } }] } }]
+      });
+
+    const firstRequest = request({ body: { update_id: 201, message: { text: 'fale sobre as novas matérias do diretor da Rockstar', chat: { id: 987 }, from: { id: 654 } } } });
+    await handler(firstRequest, response());
+    const followupRequest = request({ body: { update_id: 202, message: { text: 'cadde', chat: { id: 987 }, from: { id: 654 } } } });
+    const result = response();
+    await handler(followupRequest, result);
+
+    expect(result.json).toHaveBeenCalledWith({ status: 'chat_responded' });
+    const secondPrompt = mocks.classify.mock.calls[1][0].contents;
+    expect(secondPrompt).toContain('fale sobre as novas matérias do diretor da Rockstar');
+    expect(secondPrompt).toContain('Estou verificando as últimas novidades');
+    expect(secondPrompt).toContain('cadde');
+    const replies = outgoingTo(TELEGRAM_URL).map(([, options]) => JSON.parse(options.body).text);
+    expect(replies.at(-1)).toContain('https://source.invalid/rockstar');
+    expect(mocks.parseURL).not.toHaveBeenCalled();
+    expect(mocks.generateArticle).not.toHaveBeenCalled();
+    expect(outgoingTo(API_URL)).toHaveLength(0);
+  });
+});
