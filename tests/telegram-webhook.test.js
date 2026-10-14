@@ -184,9 +184,12 @@ describe('autorização do webhook sem acesso a serviços externos', () => {
 describe('criação e revisão de rascunhos', () => {
   it('salva rascunho com checklist pendente e envia links usando o ID persistido', async () => {
     const res = response();
-    await handler(request(), res);
+    const req = request({ body: { update_id: 111, message: { text: 'fale sobre as novas matérias do diretor da Rockstar', chat: { id: 987 }, from: { id: 654 } } } });
+    await handler(req, res);
 
     expect(res.json).toHaveBeenCalledWith({ status: 'draft_saved', articleId: 784 });
+    expect(mocks.classify.mock.calls[0][0].contents).toContain('fale sobre as novas matérias do diretor da Rockstar');
+    expect(mocks.classify.mock.calls[0][0].contents).toContain('Use CHAT quando a pessoa pedir explicitamente uma resposta ou informação');
     expect(mocks.collectArticleImages).toHaveBeenCalledWith(article.imageDirective,
       expect.objectContaining({ article, ai: expect.any(Object) }));
     const saveCalls = outgoingTo(API_URL);
@@ -280,7 +283,7 @@ describe('conversa e pedidos de informação', () => {
         candidates: [{ groundingMetadata: { groundingChunks: [{ web: { uri: 'https://source.invalid/rockstar', title: 'Fonte sobre Rockstar' } }] } }]
       });
 
-    const firstRequest = request({ body: { update_id: 201, message: { text: 'fale sobre as novas matérias do diretor da Rockstar', chat: { id: 987 }, from: { id: 654 } } } });
+    const firstRequest = request({ body: { update_id: 201, message: { text: 'Quais são as novidades sobre o diretor da Rockstar?', chat: { id: 987 }, from: { id: 654 } } } });
     await handler(firstRequest, response());
     const followupRequest = request({ body: { update_id: 202, message: { text: 'cadde', chat: { id: 987 }, from: { id: 654 } } } });
     const result = response();
@@ -288,7 +291,7 @@ describe('conversa e pedidos de informação', () => {
 
     expect(result.json).toHaveBeenCalledWith({ status: 'chat_responded' });
     const secondPrompt = mocks.classify.mock.calls[1][0].contents;
-    expect(secondPrompt).toContain('fale sobre as novas matérias do diretor da Rockstar');
+    expect(secondPrompt).toContain('Quais são as novidades sobre o diretor da Rockstar?');
     expect(secondPrompt).toContain('Estou verificando as últimas novidades');
     expect(secondPrompt).toContain('cadde');
     const replies = outgoingTo(TELEGRAM_URL).map(([, options]) => JSON.parse(options.body).text);
@@ -296,5 +299,23 @@ describe('conversa e pedidos de informação', () => {
     expect(mocks.parseURL).not.toHaveBeenCalled();
     expect(mocks.generateArticle).not.toHaveBeenCalled();
     expect(outgoingTo(API_URL)).toHaveLength(0);
+  });
+
+  it('resolve links de grounding do Google para páginas originais antes de enviar ao Telegram', async () => {
+    const opaque = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc123';
+    mocks.classify.mockResolvedValueOnce({
+      text: JSON.stringify({ intent: 'CHAT', reply: 'A Rockstar espera que as ferramentas de GTA VI ajudem projetos futuros a avançar mais rápido.' }),
+      candidates: [{ groundingMetadata: { groundingChunks: [{ web: { uri: opaque, title: 'Rock Paper Shotgun' } }] } }]
+    });
+    mocks.fetch.mockImplementation(async (url, options) => {
+      if (url === opaque) return { ok: true, url: 'https://www.rockpapershotgun.com/rockstar-future-games', body: { cancel: vi.fn() } };
+      if (url === TELEGRAM_URL) return { ok: true, json: async () => ({ ok: true }) };
+      throw new Error('Requisição inesperada bloqueada pelo teste offline.');
+    });
+
+    await handler(request({ body: { update_id: 203, message: { text: 'Quais as novidades sobre a Rockstar?', chat: { id: 987 }, from: { id: 654 } } } }), response());
+    const sentText = outgoingTo(TELEGRAM_URL).map(([, options]) => JSON.parse(options.body).text).at(-1);
+    expect(sentText).toContain('https://www.rockpapershotgun.com/rockstar-future-games');
+    expect(sentText).not.toContain('vertexaisearch.cloud.google.com');
   });
 });
